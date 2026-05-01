@@ -687,51 +687,58 @@ class _MakananCard extends StatelessWidget {
           BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))
         ],
       ),
-      child: Row(
-        children: [
-          // Gambar placeholder
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: makanan['img_url'] != null
-                ? Image.network(makanan['img_url']!, width: 56, height: 56, fit: BoxFit.cover)
-                : Container(
-                    width: 56,
-                    height: 56,
-                    color: AppColors.surfaceVariant,
-                    child: const Icon(Icons.fastfood, color: AppColors.textHint)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: GestureDetector(
+        onTap: () => context.push(
+          AppRoutes.partnerEditProduct.replaceFirst(':productId', '${makanan['id_makanan']}'),
+        ).then((refreshed) {
+          if (refreshed == true) onRefresh();
+        }),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: makanan['img_url'] != null
+                  ? Image.network(makanan['img_url']!, width: 56, height: 56, fit: BoxFit.cover)
+                  : Container(
+                      width: 56, height: 56,
+                      color: AppColors.surfaceVariant,
+                      child: const Icon(Icons.fastfood, color: AppColors.textHint)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(makanan['nama_makanan'] ?? '-',
+                      style: GoogleFonts.outfit(
+                          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text('Rp${_formatPrice(makanan['harga_diskon'] ?? 0)}',
+                      style: GoogleFonts.outfit(
+                          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(makanan['nama_makanan'] ?? '-',
-                    style: GoogleFonts.outfit(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text('Rp${_formatPrice(makanan['harga_diskon'] ?? 0)}',
-                    style: GoogleFonts.outfit(
-                        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: stokColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('Sisa: $stok',
+                      style: GoogleFonts.outfit(
+                          fontSize: 12, fontWeight: FontWeight.w700, color: stokColor)),
+                ),
+                const SizedBox(height: 6),
+                const Icon(Icons.edit_outlined, size: 16, color: AppColors.textHint),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: stokColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text('Sisa: $stok',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12, fontWeight: FontWeight.w700, color: stokColor)),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 
 class AdminDashboardPage extends StatefulWidget {
@@ -144,13 +145,45 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                         fontSize: 13, color: Colors.white.withOpacity(0.75))),
                               ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(16),
+                            GestureDetector(
+                              onTap: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                    title: Text('Keluar?', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                                    content: Text('Kamu akan keluar dari akun admin.',
+                                        style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text('Batal', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          context.read<AuthBloc>().add(AuthSignOutRequested());
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: Text('Keluar', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.red.withOpacity(0.4)),
+                                ),
+                                child: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
                               ),
-                              child: const Icon(Icons.shield_outlined, color: Colors.white, size: 28),
                             ),
                           ],
                         ),

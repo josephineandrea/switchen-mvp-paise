@@ -29,6 +29,8 @@ import 'features/admin/presentation/pages/admin_analytics_page.dart';
 import 'features/admin/presentation/pages/admin_broadcast_page.dart';
 import 'features/admin/presentation/pages/admin_approval_mitra_page.dart';
 import 'features/admin/presentation/pages/admin_approval_menu_page.dart';
+import 'features/admin/presentation/pages/admin_katalog_page.dart';
+import 'features/partner_dashboard/presentation/pages/partner_edit_product_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'injection_container.dart';
@@ -79,6 +81,12 @@ final appRouter = GoRouter(
     GoRoute(path: AppRoutes.adminBroadcast, builder: (_, __) => const AdminBroadcastPage()),
     GoRoute(path: AppRoutes.adminApprovalMitra, builder: (_, __) => const AdminApprovalMitraPage()),
     GoRoute(path: AppRoutes.adminApprovalMenu, builder: (_, __) => const AdminApprovalMenuPage()),
+    GoRoute(path: AppRoutes.adminKatalog, builder: (_, __) => const AdminKatalogPage()),
+    GoRoute(
+      path: AppRoutes.partnerEditProduct,
+      builder: (_, state) => PartnerEditProductPage(
+          productId: state.pathParameters['productId']!),
+    ),
     GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfilePage()),
   ],
 );
