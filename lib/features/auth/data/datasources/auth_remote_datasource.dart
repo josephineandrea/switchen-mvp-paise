@@ -126,6 +126,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   Future<UserModel> _fetchProfile(User user) async {
+    // Coba cari berdasarkan email (kolom unik di tabel account)
     final data = await _client
         .from('account')
         .select()
@@ -133,16 +134,19 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         .maybeSingle();
         
     if (data == null) {
-      // If user exists in Auth but not in pelanggan, return a dummy or throw
-      return UserModel(
-        id: user.id,
-        email: user.email ?? '',
-        fullName: 'Pengguna',
-        phone: '',
-        role: UserRole.consumer,
-        createdAt: DateTime.now(),
+      // Data profil tidak ditemukan — log untuk debugging
+      AppLogger.error(
+        '_fetchProfile',
+        error: 'Profil tidak ditemukan untuk email: ${user.email}. '
+            'Pastikan data sudah ada di tabel public.account.',
+      );
+      // Throw agar tidak silently fallback ke role consumer
+      throw app_exc.AuthException(
+        message: 'Data akun tidak ditemukan. Hubungi admin atau daftar ulang.',
       );
     }
+
+    AppLogger.error('_fetchProfile', error: 'Role terbaca: ${data['role']}');
 
     return UserModel(
       id: data['id_pelanggan'].toString(),
@@ -150,7 +154,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       fullName: data['nama_account'],
       phone: data['no_hp'] ?? '',
       role: UserRoleExtension.fromString(data['role'] ?? 'consumer'),
-      createdAt: data['created_at'] != null ? DateTime.parse(data['created_at']) : DateTime.now(),
+      createdAt: data['created_at'] != null
+          ? DateTime.parse(data['created_at'])
+          : DateTime.now(),
     );
   }
 }
