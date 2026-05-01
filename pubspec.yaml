@@ -75,6 +75,7 @@ dependencies:
 
   # OTP Input
   pinput: ^5.0.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

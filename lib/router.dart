@@ -14,6 +14,8 @@ import 'features/store_discovery/presentation/pages/store_detail_page.dart';
 import 'features/store_discovery/presentation/pages/store_list_page.dart';
 import 'features/order/presentation/pages/order_history_page.dart';
 import 'features/order/presentation/pages/order_detail_page.dart';
+import 'features/order/presentation/pages/order_checkout_page.dart';
+import 'features/order/presentation/pages/order_success_page.dart';
 import 'features/coupon/presentation/pages/coupon_list_page.dart';
 import 'features/coupon/presentation/pages/coupon_detail_page.dart';
 import 'features/notification/presentation/pages/notification_page.dart';
@@ -55,7 +57,28 @@ final appRouter = GoRouter(
       builder: (_, state) =>
           OrderDetailPage(orderId: state.pathParameters['orderId']!),
     ),
-    GoRoute(path: AppRoutes.orderCheckout, builder: (_, __) => const OrderHistoryPage()),
+    GoRoute(
+      path: AppRoutes.orderCheckout,
+      builder: (_, state) {
+        final extraData = state.extra as Map<String, dynamic>?;
+        
+        return OrderCheckoutPage(
+          orderData: extraData ?? {
+            'nama_makanan': 'Pesanan',
+            'total_harga': 0,
+            'metode_pembayaran': 'QRIS',
+            'jumlah_pesan': 1,
+          },
+        );
+      },
+    ),
+    GoRoute(
+      path: AppRoutes.orderSuccess,
+      builder: (_, state) {
+        final orderId = state.extra as String? ?? 'PSN-00001';
+        return OrderSuccessPage(orderId: orderId);
+      },
+    ),
     GoRoute(path: AppRoutes.myCoupons, builder: (_, __) => const CouponListPage()),
     GoRoute(
       path: AppRoutes.couponDetail,

@@ -30,6 +30,182 @@ class _HomePageState extends State<HomePage> {
     _fetchCategories();
   }
 
+  void _showProductDetail(BuildContext context, String foodId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return FutureBuilder<Map<String, dynamic>>(
+          future: Supabase.instance.client
+              .from('makanan')
+              .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
+              .eq('id_makanan', foodId)
+              .single(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+            }
+
+            final product = snapshot.data!;
+            final dapur = product['dapur'] as Map<String, dynamic>;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.zero, 
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                                child: Image.asset(
+                                  'assets/images/${product['img_url']}',
+                                  height: 280,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 280,
+                                      width: double.infinity,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                    );
+                                  },
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product['nama_makanan'], 
+                                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary)
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(children: [
+                                          const Icon(Icons.storefront, size: 18, color: Colors.grey),
+                                          const SizedBox(width: 6),
+                                          Text(dapur['nama_dapur'], style: GoogleFonts.outfit(color: Colors.grey)),
+                                        ]),
+                                        Row(children: [
+                                          const Icon(Icons.location_on, size: 18, color: Colors.redAccent),
+                                          const SizedBox(width: 4),
+                                          Text('${dapur['jarak_dummy']} km', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                        ]),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: const Color(0xFFF4FBF7), borderRadius: BorderRadius.circular(12)),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.access_time, size: 18, color: AppColors.primary),
+                                          const SizedBox(width: 8),
+                                          Text('Waktu Ambil : 14.00 - 18.00 WIB', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text('Deskripsi Makanan', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    Text(product['deskripsi'] ?? 'Tidak ada deskripsi.', style: GoogleFonts.outfit(color: Colors.grey, height: 1.5)),
+                                    const SizedBox(height: 100),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                        decoration: BoxDecoration(
+                          color: Colors.white, 
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]
+                        ),
+                        child: Row(
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Harga', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                                Row(
+                                  children: [
+                                    Text('Rp${product['harga_diskon']}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                    const SizedBox(width: 8),
+                                    Text('Rp${product['harga_asli']}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, decoration: TextDecoration.lineThrough)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  context.pop(); 
+                                  context.push(AppRoutes.orderDetail.replaceFirst(':orderId', foodId));
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF7E7E),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                child: Text('Pesan', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  Positioned(
+                    top: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 40, 
+                        height: 4, 
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9), 
+                          borderRadius: BorderRadius.circular(2),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2)
+                          ]
+                        )
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _fetchCategories() async {
     final supabase = Supabase.instance.client;
     try {
@@ -257,7 +433,10 @@ class _HomePageState extends State<HomePage> {
                             children: [
                               ...mappedProducts.map((product) => Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                child: _ProductCard(product: product),
+                                child: _ProductCard(
+                                  product: product,
+                                  onTap: () => _showProductDetail(context, product['id']), // Kirim fungsinya di sini
+                                ),
                               )),
                               
                               // Pagination Controls
@@ -473,7 +652,8 @@ class _NavItem extends StatelessWidget {
 
 class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
-  const _ProductCard({required this.product});
+  final VoidCallback onTap;
+  const _ProductCard({required this.product, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -571,29 +751,32 @@ class _ProductCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    product['image'],
-                    width: 120, // Diperbesar menyesuaikan lebar tombol
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                // Di dalam class _ProductCard
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  // Rakit jalannya: 'assets/images/' + 'nasi_goreng.jpg'
+                  'assets/images/${product['image']}', 
+                  width: 120,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  // Antisipasi kalau nama file di database nggak ada di folder assets
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
                       width: 120,
                       height: 80,
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.fastfood, color: AppColors.textHint),
-                    ),
-                  ),
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.fastfood, color: Colors.grey),
+                    );
+                  },
                 ),
+              ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: 120, // Lebar tombol Pesan disamakan dengan gambar
                   height: 36,
                   child: ElevatedButton(
-                    onPressed: () => context.push(
-                      AppRoutes.storeDetail.replaceFirst(':storeId', product['id'] ?? 'demo'),
-                    ),
+                    onPressed: onTap,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B6B), // Red/Pink button
                       foregroundColor: Colors.white,
