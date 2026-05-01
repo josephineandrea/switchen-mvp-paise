@@ -42,23 +42,64 @@ class _PartnerOnboardingPageState extends State<PartnerOnboardingPage> {
     try {
       final client = Supabase.instance.client;
 
-      // Insert toko baru ke tabel dapur
-      await client.from('dapur').insert({
+      // Cari id_pelanggan dari tabel account berdasarkan email
+      final accountData = await client
+          .from('account')
+          .select('id_pelanggan')
+          .eq('email', authState.user.email)
+          .maybeSingle();
+
+      if (accountData == null) {
+        throw Exception('Akun tidak ditemukan di database.');
+      }
+
+      final idPelanggan = accountData['id_pelanggan'];
+
+      // Cek apakah sudah pernah mengajukan permintaan
+      final existing = await client
+          .from('permintaan_mitra')
+          .select('id_permintaan, status')
+          .eq('id_pelanggan', idPelanggan)
+          .maybeSingle();
+
+      if (existing != null) {
+        final status = existing['status'];
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                status == 'pending'
+                    ? 'Permintaanmu sedang menunggu review admin.'
+                    : status == 'disetujui'
+                        ? 'Tokomu sudah aktif!'
+                        : 'Permintaan sebelumnya ditolak. Hubungi admin.',
+                style: GoogleFonts.outfit(),
+              ),
+              backgroundColor: status == 'disetujui' ? AppColors.primary : Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Simpan ke tabel permintaan_mitra (menunggu persetujuan admin)
+      await client.from('permintaan_mitra').insert({
+        'id_pelanggan': idPelanggan,
         'nama_dapur': _nameCtrl.text.trim(),
         'telp_dapur': _phoneCtrl.text.trim(),
         'alamat_dapur': _addressCtrl.text.trim(),
-        'jarak_dummy': 0.0,
-        'id_pelanggan': int.parse(authState.user.id),
+        'status': 'pending',
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Pendaftaran mitra berhasil! Menunggu verifikasi admin.',
+              '✅ Permintaan terkirim! Admin akan meninjau tokomu segera.',
               style: GoogleFonts.outfit(),
             ),
             backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 4),
           ),
         );
         context.go(AppRoutes.partnerDashboard);
@@ -67,7 +108,7 @@ class _PartnerOnboardingPageState extends State<PartnerOnboardingPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal mendaftar: $e', style: GoogleFonts.outfit()),
+            content: Text('Gagal mengirim: $e', style: GoogleFonts.outfit()),
             backgroundColor: Colors.red,
           ),
         );

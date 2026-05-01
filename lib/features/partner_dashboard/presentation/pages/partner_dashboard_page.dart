@@ -7,9 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
-import '../../../profile/presentation/pages/profile_page.dart';
 
 class PartnerDashboardPage extends StatefulWidget {
   const PartnerDashboardPage({super.key});
@@ -36,11 +34,26 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
 
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final client = Supabase.instance.client;
-      final partnerId = int.tryParse(authState.user.id);
-      if (partnerId == null) return;
+      final userEmail = authState.user.email;
+
+      // Ambil id_pelanggan dari tabel account berdasarkan email
+      final accountData = await client
+          .from('account')
+          .select('id_pelanggan')
+          .eq('email', userEmail)
+          .maybeSingle();
+
+      if (accountData == null) {
+        debugPrint('[Partner] Akun tidak ditemukan di tabel account: $userEmail');
+        _hasStore = false;
+        return; // finally tetap berjalan
+      }
+
+      final partnerId = accountData['id_pelanggan'];
+      debugPrint('[Partner] partnerId: $partnerId');
 
       // Cek apakah sudah punya toko
       final dapurData = await client
@@ -48,6 +61,8 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
           .select()
           .eq('id_pelanggan', partnerId)
           .maybeSingle();
+
+      debugPrint('[Partner] dapurData: $dapurData');
 
       if (dapurData != null) {
         _dapur = dapurData;
@@ -61,8 +76,9 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
             .eq('id_dapur', idDapur)
             .order('created_at', ascending: false);
         _makananList = List<Map<String, dynamic>>.from(makanan);
+        debugPrint('[Partner] Makanan loaded: ${_makananList.length}');
 
-        // Load pesanan masuk hari ini
+        // Load pesanan hari ini
         final today = DateTime.now();
         final startOfDay = DateTime(today.year, today.month, today.day).toIso8601String();
         final pesanan = await client
@@ -74,15 +90,16 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
             .gte('tanggal_pesan', startOfDay)
             .order('tanggal_pesan', ascending: false);
 
-        // Filter hanya untuk toko ini
         _pesananHariIni = List<Map<String, dynamic>>.from(pesanan)
             .where((p) => p['makanan']?['id_dapur'] == idDapur)
             .toList();
+        debugPrint('[Partner] Pesanan hari ini: ${_pesananHariIni.length}');
       } else {
         _hasStore = false;
+        debugPrint('[Partner] Belum punya toko, tampilkan onboarding.');
       }
-    } catch (e) {
-      debugPrint('Error: $e');
+    } catch (e, st) {
+      debugPrint('[Partner] Error _loadData: $e\n$st');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -111,6 +128,8 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
   }
 
   Widget _buildBody(String userName) {
+    final storeName = _dapur?['nama_dapur'] ?? 'Toko Anda';
+
     return Stack(
       children: [
         // ── Header ────────────────────────────────────────────────────────
@@ -120,64 +139,62 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
             bottomRight: Radius.circular(32),
           ),
           child: Container(
-            height: MediaQuery.of(context).padding.top + 180,
+            height: MediaQuery.of(context).padding.top + 140,
             width: double.infinity,
-            color: AppColors.primary,
-            child: Stack(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF004D40), Color(0xFF00695C), Color(0xFF00897B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 20,
+              right: 20,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 20,
-                  left: 20,
-                  right: 20,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Dashboard Mitra',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 13, color: Colors.white.withOpacity(0.8))),
-                              Text(
-                                'Hei, $userName! 👋',
-                                style: GoogleFonts.outfit(
-                                    fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.storefront, color: Colors.white, size: 24),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // Stats row
-                      if (_hasStore && !_isLoading)
-                        Row(
-                          children: [
-                            _StatChip(
-                              label: 'Produk Aktif',
-                              value: '${_makananList.length}',
-                              icon: Icons.fastfood_outlined,
-                            ),
-                            const SizedBox(width: 12),
-                            _StatChip(
-                              label: 'Pesanan Hari Ini',
-                              value: '${_pesananHariIni.length}',
-                              icon: Icons.receipt_long_outlined,
-                            ),
-                          ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Dashboard Mitra F\u0026B',
+                          style: GoogleFonts.outfit(
+                              fontSize: 13, color: Colors.white.withOpacity(0.8)),
                         ),
-                    ],
-                  ),
+                        Text(
+                          storeName,
+                          style: GoogleFonts.outfit(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Hei, $userName! 👋',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: _showTokoInfo,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: const Icon(Icons.info_outline, color: Colors.white, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -186,7 +203,7 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
 
         // ── Body ────────────────────────────────────────────────────────
         Padding(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 190),
+          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 150),
           child: _isLoading
               ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
               : !_hasStore
@@ -200,6 +217,31 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Stats row (pindah dari header ke body)
+                            if (_hasStore)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _BodyStatChip(
+                                      label: 'Produk Aktif',
+                                      value: '${_makananList.length}',
+                                      icon: Icons.fastfood_outlined,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _BodyStatChip(
+                                      label: 'Pesanan Hari Ini',
+                                      value: '${_pesananHariIni.length}',
+                                      icon: Icons.receipt_long_outlined,
+                                      color: const Color(0xFF60A5FA),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            if (_hasStore) const SizedBox(height: 16),
+
                             // Quick Actions
                             Row(
                               children: [
@@ -415,19 +457,44 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
                 icon: Icons.dashboard_rounded,
                 label: 'Dashboard',
                 selected: _currentIndex == 0,
-                onTap: () => setState(() => _currentIndex = 0),
+                onTap: () {
+                  setState(() => _currentIndex = 0);
+                  // Sudah di dashboard, tidak perlu navigate
+                },
               ),
               _NavItem(
-                icon: Icons.receipt_long_rounded,
-                label: 'Pesanan',
+                icon: Icons.add_circle_outline_rounded,
+                label: 'Tambah',
                 selected: _currentIndex == 1,
-                onTap: () => setState(() => _currentIndex = 1),
+                onTap: () {
+                  setState(() => _currentIndex = 1);
+                  context.push(AppRoutes.partnerAddSurplus).then((_) {
+                    setState(() => _currentIndex = 0);
+                    _loadData();
+                  });
+                },
+              ),
+              _NavItem(
+                icon: Icons.qr_code_scanner_rounded,
+                label: 'Scan QR',
+                selected: _currentIndex == 2,
+                onTap: () {
+                  setState(() => _currentIndex = 2);
+                  context.push(AppRoutes.partnerScanCoupon).then((_) {
+                    setState(() => _currentIndex = 0);
+                  });
+                },
               ),
               _NavItem(
                 icon: Icons.person_rounded,
                 label: 'Profil',
-                selected: _currentIndex == 2,
-                onTap: () => context.push(AppRoutes.profile),
+                selected: _currentIndex == 3,
+                onTap: () {
+                  setState(() => _currentIndex = 3);
+                  context.push(AppRoutes.profile).then((_) {
+                    setState(() => _currentIndex = 0);
+                  });
+                },
               ),
             ],
           ),
@@ -439,42 +506,67 @@ class _PartnerDashboardPageState extends State<PartnerDashboardPage> {
 
 // ── Helper Widgets ────────────────────────────────────────────────────────────
 
-class _StatChip extends StatelessWidget {
+class _BodyStatChip extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
 
-  const _StatChip({required this.label, required this.value, required this.icon});
+  const _BodyStatChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value,
-                    style: GoogleFonts.outfit(
-                        fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
-                Text(label,
-                    style: GoogleFonts.outfit(fontSize: 10, color: Colors.white.withOpacity(0.8))),
-              ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          )
+        ],
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
-        ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: GoogleFonts.outfit(
+                    fontSize: 20, fontWeight: FontWeight.w800, color: color),
+              ),
+              Text(
+                label,
+                style: GoogleFonts.outfit(
+                    fontSize: 11, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
+
 
 class _SectionHeader extends StatelessWidget {
   final String title;

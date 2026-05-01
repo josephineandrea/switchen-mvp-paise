@@ -146,7 +146,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
     }
 
-    AppLogger.error('_fetchProfile', error: 'Role terbaca: ${data['role']}');
+    AppLogger.info('_fetchProfile: Role terbaca: ${data['role']}');
 
     return UserModel(
       id: data['id_pelanggan'].toString(),

@@ -27,6 +27,8 @@ import 'features/admin/presentation/pages/admin_partners_page.dart';
 import 'features/admin/presentation/pages/admin_food_waste_page.dart';
 import 'features/admin/presentation/pages/admin_analytics_page.dart';
 import 'features/admin/presentation/pages/admin_broadcast_page.dart';
+import 'features/admin/presentation/pages/admin_approval_mitra_page.dart';
+import 'features/admin/presentation/pages/admin_approval_menu_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'injection_container.dart';
@@ -75,6 +77,8 @@ final appRouter = GoRouter(
     GoRoute(path: AppRoutes.adminFoodWaste, builder: (_, __) => const AdminFoodWastePage()),
     GoRoute(path: AppRoutes.adminAnalytics, builder: (_, __) => const AdminAnalyticsPage()),
     GoRoute(path: AppRoutes.adminBroadcast, builder: (_, __) => const AdminBroadcastPage()),
+    GoRoute(path: AppRoutes.adminApprovalMitra, builder: (_, __) => const AdminApprovalMitraPage()),
+    GoRoute(path: AppRoutes.adminApprovalMenu, builder: (_, __) => const AdminApprovalMenuPage()),
     GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfilePage()),
   ],
 );
