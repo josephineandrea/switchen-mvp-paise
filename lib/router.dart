@@ -21,6 +21,7 @@ import 'features/partner_dashboard/presentation/pages/partner_dashboard_page.dar
 import 'features/partner_dashboard/presentation/pages/add_surplus_page.dart';
 import 'features/partner_dashboard/presentation/pages/partner_sales_page.dart';
 import 'features/partner_dashboard/presentation/pages/scan_coupon_page.dart';
+import 'features/partner_dashboard/presentation/pages/partner_onboarding_page.dart';
 import 'features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'features/admin/presentation/pages/admin_partners_page.dart';
 import 'features/admin/presentation/pages/admin_food_waste_page.dart';
@@ -68,6 +69,7 @@ final appRouter = GoRouter(
     GoRoute(path: AppRoutes.partnerAddSurplus, builder: (_, __) => const AddSurplusPage()),
     GoRoute(path: AppRoutes.partnerSales, builder: (_, __) => const PartnerSalesPage()),
     GoRoute(path: AppRoutes.partnerScanCoupon, builder: (_, __) => const ScanCouponPage()),
+    GoRoute(path: AppRoutes.partnerOnboarding, builder: (_, __) => const PartnerOnboardingPage()),
     GoRoute(path: AppRoutes.adminDashboard, builder: (_, __) => const AdminDashboardPage()),
     GoRoute(path: AppRoutes.adminPartners, builder: (_, __) => const AdminPartnersPage()),
     GoRoute(path: AppRoutes.adminFoodWaste, builder: (_, __) => const AdminFoodWastePage()),

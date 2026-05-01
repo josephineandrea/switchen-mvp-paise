@@ -61,12 +61,13 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         throw const app_exc.AuthException(message: 'Registrasi gagal.');
       }
       
-      // Insert into pelanggan table (since profiles is gone)
-      await _client.from('pelanggan').insert({
-        'nama_pelanggan': fullName,
+      // Insert into account table
+      await _client.from('account').insert({
+        'nama_account': fullName,
         'email': email,
         'no_hp': phone,
         'alamat': '', // Default empty address
+        'role': role, // Store the role
       });
 
       return UserModel(
@@ -126,7 +127,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   Future<UserModel> _fetchProfile(User user) async {
     final data = await _client
-        .from('pelanggan')
+        .from('account')
         .select()
         .eq('email', user.email!)
         .maybeSingle();
@@ -146,9 +147,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     return UserModel(
       id: data['id_pelanggan'].toString(),
       email: data['email'],
-      fullName: data['nama_pelanggan'],
+      fullName: data['nama_account'],
       phone: data['no_hp'] ?? '',
-      role: UserRole.consumer, // Assuming all pelanggan are consumers for now
+      role: UserRoleExtension.fromString(data['role'] ?? 'consumer'),
       createdAt: data['created_at'] != null ? DateTime.parse(data['created_at']) : DateTime.now(),
     );
   }
