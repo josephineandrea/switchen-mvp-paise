@@ -163,8 +163,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 label: 'Profil',
                 selected: _currentIndex == 2,
                 onTap: () {
-                  setState(() => _currentIndex = 2);
-                  // context.push(AppRoutes.profile);
+                  context.push(AppRoutes.profile);
                 },
               ),
             ],

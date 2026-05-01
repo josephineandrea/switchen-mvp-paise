@@ -21,19 +21,25 @@ import 'features/partner_dashboard/presentation/pages/partner_dashboard_page.dar
 import 'features/partner_dashboard/presentation/pages/add_surplus_page.dart';
 import 'features/partner_dashboard/presentation/pages/partner_sales_page.dart';
 import 'features/partner_dashboard/presentation/pages/scan_coupon_page.dart';
+import 'features/partner_dashboard/presentation/pages/partner_onboarding_page.dart';
 import 'features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'features/admin/presentation/pages/admin_partners_page.dart';
 import 'features/admin/presentation/pages/admin_food_waste_page.dart';
 import 'features/admin/presentation/pages/admin_analytics_page.dart';
 import 'features/admin/presentation/pages/admin_broadcast_page.dart';
+import 'features/admin/presentation/pages/admin_approval_mitra_page.dart';
+import 'features/admin/presentation/pages/admin_approval_menu_page.dart';
+import 'features/admin/presentation/pages/admin_katalog_page.dart';
+import 'features/partner_dashboard/presentation/pages/partner_edit_product_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
+import 'features/profile/presentation/pages/profile_page.dart';
 import 'injection_container.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: AppRoutes.home,
+  initialLocation: AppRoutes.splash,
   routes: [
     GoRoute(path: AppRoutes.splash, builder: (_, __) => const _SplashPage()),
     GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginPage()),
@@ -67,11 +73,21 @@ final appRouter = GoRouter(
     GoRoute(path: AppRoutes.partnerAddSurplus, builder: (_, __) => const AddSurplusPage()),
     GoRoute(path: AppRoutes.partnerSales, builder: (_, __) => const PartnerSalesPage()),
     GoRoute(path: AppRoutes.partnerScanCoupon, builder: (_, __) => const ScanCouponPage()),
+    GoRoute(path: AppRoutes.partnerOnboarding, builder: (_, __) => const PartnerOnboardingPage()),
     GoRoute(path: AppRoutes.adminDashboard, builder: (_, __) => const AdminDashboardPage()),
     GoRoute(path: AppRoutes.adminPartners, builder: (_, __) => const AdminPartnersPage()),
     GoRoute(path: AppRoutes.adminFoodWaste, builder: (_, __) => const AdminFoodWastePage()),
     GoRoute(path: AppRoutes.adminAnalytics, builder: (_, __) => const AdminAnalyticsPage()),
     GoRoute(path: AppRoutes.adminBroadcast, builder: (_, __) => const AdminBroadcastPage()),
+    GoRoute(path: AppRoutes.adminApprovalMitra, builder: (_, __) => const AdminApprovalMitraPage()),
+    GoRoute(path: AppRoutes.adminApprovalMenu, builder: (_, __) => const AdminApprovalMenuPage()),
+    GoRoute(path: AppRoutes.adminKatalog, builder: (_, __) => const AdminKatalogPage()),
+    GoRoute(
+      path: AppRoutes.partnerEditProduct,
+      builder: (_, state) => PartnerEditProductPage(
+          productId: state.pathParameters['productId']!),
+    ),
+    GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfilePage()),
   ],
 );
 
