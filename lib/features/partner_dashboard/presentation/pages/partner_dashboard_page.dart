@@ -714,9 +714,40 @@ class _MakananCard extends StatelessWidget {
                           fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
-                  Text('Rp${_formatPrice(makanan['harga_diskon'] ?? 0)}',
-                      style: GoogleFonts.outfit(
-                          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  Row(
+                    children: [
+                      Text('Rp${_formatPrice(makanan['harga_diskon'] ?? 0)}',
+                          style: GoogleFonts.outfit(
+                              fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                      const SizedBox(width: 6),
+                      Text('Rp${_formatPrice(makanan['harga_asli'] ?? 0)}',
+                          style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: AppColors.textHint,
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: AppColors.textHint)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Builder(builder: (ctx) {
+                    final asli = (makanan['harga_asli'] as num?)?.toInt() ?? 0;
+                    final diskon = (makanan['harga_diskon'] as num?)?.toInt() ?? 0;
+                    final persen = asli > 0 ? (((asli - diskon) / asli) * 100).round() : 0;
+                    return persen > 0
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('Hemat $persen%',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.red.shade700)),
+                          )
+                        : const SizedBox();
+                  }),
                 ],
               ),
             ),

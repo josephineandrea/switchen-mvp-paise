@@ -22,6 +22,7 @@ class _PartnerEditProductPageState extends State<PartnerEditProductPage> {
   Map<String, dynamic>? _makanan;
   bool _isLoading = true;
   bool _isSaving = false;
+  int _hargaDiskonPreview = 0; // untuk real-time preview
 
   @override
   void initState() {
@@ -47,13 +48,18 @@ class _PartnerEditProductPageState extends State<PartnerEditProductPage> {
       setState(() {
         _makanan = data;
         _hargaDiskonCtrl.text = '${data['harga_diskon']}';
+        _hargaDiskonPreview = (data['harga_diskon'] as num?)?.toInt() ?? 0;
         _stokCtrl.text = '${data['stok']}';
-        // Format tanggal expired
         final exp = data['expired_at'] != null
             ? DateTime.parse(data['expired_at']).toLocal()
             : DateTime.now().add(const Duration(hours: 6));
         _expiredCtrl.text =
             '${exp.day.toString().padLeft(2, '0')}/${exp.month.toString().padLeft(2, '0')}/${exp.year} ${exp.hour.toString().padLeft(2, '0')}:${exp.minute.toString().padLeft(2, '0')}';
+      });
+      // Listener real-time preview
+      _hargaDiskonCtrl.addListener(() {
+        final val = int.tryParse(_hargaDiskonCtrl.text) ?? 0;
+        if (mounted) setState(() => _hargaDiskonPreview = val);
       });
     } catch (e) {
       debugPrint('[EditProduct] Error: $e');
@@ -214,20 +220,128 @@ class _PartnerEditProductPageState extends State<PartnerEditProductPage> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Editable fields
+                          // Editable fields — Harga Surplus
                           _buildLabel('Harga Surplus (Rp)'),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _hargaDiskonCtrl,
-                            keyboardType: TextInputType.number,
-                            style: GoogleFonts.outfit(),
-                            validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
-                            decoration: _inputDeco(
-                              hint: 'Contoh: 20000',
-                              helper:
-                                  'Harus lebih kecil dari harga normal (Rp${_makanan?['harga_asli'] ?? 0})',
-                            ),
-                          ),
+                          const SizedBox(height: 4),
+                          // Batas atas yang jelas
+                          Builder(builder: (ctx) {
+                            final hargaAsli = (_makanan?['harga_asli'] as num?)?.toInt() ?? 0;
+                            final isOverLimit = _hargaDiskonPreview >= hargaAsli && _hargaDiskonPreview > 0;
+                            final persen = hargaAsli > 0 && _hargaDiskonPreview > 0
+                                ? (((hargaAsli - _hargaDiskonPreview) / hargaAsli) * 100).round()
+                                : 0;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Preview card
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color: isOverLimit
+                                        ? Colors.red.shade50
+                                        : const Color(0xFFF0FDF4),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: isOverLimit
+                                            ? Colors.red.shade300
+                                            : AppColors.primary.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Harga Normal',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 11, color: AppColors.textSecondary)),
+                                          Text(
+                                            'Rp${_formatNumber(hargaAsli)}',
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.textPrimary,
+                                                decoration: TextDecoration.lineThrough,
+                                                decorationColor: AppColors.textHint),
+                                          ),
+                                        ],
+                                      ),
+                                      const Icon(Icons.arrow_forward, size: 16, color: AppColors.textHint),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text('Harga Surplus',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 11,
+                                                  color: isOverLimit ? Colors.red : AppColors.primary)),
+                                          Text(
+                                            _hargaDiskonPreview > 0
+                                                ? 'Rp${_formatNumber(_hargaDiskonPreview)}'
+                                                : '-',
+                                            style: GoogleFonts.outfit(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: isOverLimit ? Colors.red : AppColors.primary),
+                                          ),
+                                        ],
+                                      ),
+                                      if (!isOverLimit && persen > 0)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.shade100,
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text('-$persen%',
+                                              style: GoogleFonts.outfit(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Colors.green.shade800)),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (isOverLimit)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.warning_rounded,
+                                            size: 14, color: Colors.red),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Maks: Rp${_formatNumber(hargaAsli - 1)} (di bawah harga normal)',
+                                          style: GoogleFonts.outfit(
+                                              fontSize: 11, color: Colors.red),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                TextFormField(
+                                  controller: _hargaDiskonCtrl,
+                                  keyboardType: TextInputType.number,
+                                  style: GoogleFonts.outfit(),
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) return 'Wajib diisi';
+                                    final val = int.tryParse(v) ?? 0;
+                                    if (val <= 0) return 'Harga harus lebih dari 0';
+                                    if (val >= hargaAsli) {
+                                      return 'Harus lebih kecil dari harga normal (Rp${_formatNumber(hargaAsli)})';
+                                    }
+                                    return null;
+                                  },
+                                  decoration: _inputDeco(
+                                    hint: 'Contoh: ${(hargaAsli * 0.5).round()}',
+                                    helper: 'Batas maksimal: Rp${_formatNumber(hargaAsli - 1)}',
+                                    isError: isOverLimit,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
                           const SizedBox(height: 16),
 
                           _buildLabel('Stok Hari Ini (porsi)'),
@@ -277,6 +391,9 @@ class _PartnerEditProductPageState extends State<PartnerEditProductPage> {
     );
   }
 
+  String _formatNumber(int n) => n.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+
   Widget _buildLabel(String text) => Text(text,
       style: GoogleFonts.outfit(
           fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary));
@@ -302,24 +419,27 @@ class _PartnerEditProductPageState extends State<PartnerEditProductPage> {
         ),
       );
 
-  InputDecoration _inputDeco({String? hint, String? helper}) => InputDecoration(
+  InputDecoration _inputDeco({String? hint, String? helper, bool isError = false}) => InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.outfit(color: AppColors.textHint, fontSize: 14),
         helperText: helper,
-        helperStyle: GoogleFonts.outfit(fontSize: 11, color: AppColors.textSecondary),
+        helperStyle: GoogleFonts.outfit(
+            fontSize: 11,
+            color: isError ? Colors.red : AppColors.textSecondary),
         helperMaxLines: 2,
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: AppColors.divider)),
+            borderSide: BorderSide(color: isError ? Colors.red : AppColors.divider)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: AppColors.divider)),
+            borderSide: BorderSide(color: isError ? Colors.red : AppColors.divider)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+            borderSide: BorderSide(
+                color: isError ? Colors.red : AppColors.primary, width: 2)),
         errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: Colors.red)),
