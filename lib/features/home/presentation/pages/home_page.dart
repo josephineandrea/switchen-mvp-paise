@@ -98,7 +98,7 @@ class _HomePageState extends State<HomePage> {
                       // Gambar Perempuan (Otomatis terpotong rapi di dalam batas hijau)
                       Positioned(
                         bottom: -10, // Pas di bawah
-                        right: 50, 
+                        right: 20, 
                         child: SizedBox(
                           height: 150, // Sengaja dibuat besar agar pas dan terpotong
                           child: SvgPicture.asset('assets/images/hero_illustration.svg'),

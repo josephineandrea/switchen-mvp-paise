@@ -33,7 +33,7 @@ final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: AppRoutes.home,
+  initialLocation: AppRoutes.splash,
   routes: [
     GoRoute(path: AppRoutes.splash, builder: (_, __) => const _SplashPage()),
     GoRoute(path: AppRoutes.login, builder: (_, __) => const LoginPage()),
