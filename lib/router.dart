@@ -27,6 +27,7 @@ import 'features/admin/presentation/pages/admin_food_waste_page.dart';
 import 'features/admin/presentation/pages/admin_analytics_page.dart';
 import 'features/admin/presentation/pages/admin_broadcast_page.dart';
 import 'features/home/presentation/pages/home_page.dart';
+import 'features/profile/presentation/pages/profile_page.dart';
 import 'injection_container.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -72,6 +73,7 @@ final appRouter = GoRouter(
     GoRoute(path: AppRoutes.adminFoodWaste, builder: (_, __) => const AdminFoodWastePage()),
     GoRoute(path: AppRoutes.adminAnalytics, builder: (_, __) => const AdminAnalyticsPage()),
     GoRoute(path: AppRoutes.adminBroadcast, builder: (_, __) => const AdminBroadcastPage()),
+    GoRoute(path: AppRoutes.profile, builder: (_, __) => const ProfilePage()),
   ],
 );
 
