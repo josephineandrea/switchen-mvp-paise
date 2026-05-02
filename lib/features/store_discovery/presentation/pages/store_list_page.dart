@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_routes.dart';
 
 class StoreListPage extends StatefulWidget {
   const StoreListPage({super.key});
@@ -12,66 +14,307 @@ class StoreListPage extends StatefulWidget {
 
 class _StoreListPageState extends State<StoreListPage> {
   final _searchCtrl = TextEditingController();
+  final int _currentIndex = 0;
 
-  final List<Map<String, dynamic>> _products = [
-    {
-      'name': 'Butter Croissant',
-      'store': 'Toko Roti Braga',
-      'distance': '0.5 km',
-      'price': 10000,
-      'originalPrice': 25000,
-      'image': 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=300&q=80',
-    },
-    {
-      'name': 'Nasi Kotak',
-      'store': 'Warung Sari Rasa',
-      'distance': '1.2 km',
-      'price': 10000,
-      'originalPrice': 25000,
-      'image': 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=300&q=80',
-    },
-    {
-      'name': 'Salad Sayur',
-      'store': 'Green Bowl Café',
-      'distance': '0.8 km',
-      'price': 12000,
-      'originalPrice': 30000,
-      'image': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=300&q=80',
-    },
-    {
-      'name': 'Kue Lapis',
-      'store': 'Kue Bu Siti',
-      'distance': '2.1 km',
-      'price': 8000,
-      'originalPrice': 20000,
-      'image': 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&q=80',
-    },
-  ];
+  List<Map<String, dynamic>> _allProducts = [];
+  List<Map<String, dynamic>> _allStores = [];
+  List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _stores = [];
+  
+  bool _isLoading = true;
+  String _userAddress = 'Memuat lokasi...';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      Map<String, dynamic>? userData;
+      if (user != null && user.email != null) {
+        userData = await supabase
+            .from('account')
+            .select('alamat')
+            .eq('email', user.email!)
+            .maybeSingle();
+      } else {
+        userData = await supabase
+            .from('account')
+            .select('alamat')
+            .eq('id_pelanggan', 1)
+            .maybeSingle();
+      }
+
+      final fetchedAddress = userData?['alamat'] ?? 'Lokasi tidak ditemukan';
+      final storeResponse = await supabase.from('dapur').select();
+      
+      final productResponse = await supabase
+          .from('makanan')
+          .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
+          .gt('stok', 0);
+
+      if (mounted) {
+        setState(() {
+          _userAddress = fetchedAddress;
+          
+          _allStores = List<Map<String, dynamic>>.from(storeResponse);
+          
+          _allProducts = List<Map<String, dynamic>>.from(productResponse).map((p) {
+            final dapur = p['dapur'] as Map<String, dynamic>?;
+            return {
+              'id': p['id_makanan'].toString(),
+              'name': p['nama_makanan'] ?? 'Tanpa Nama',
+              'store': dapur?['nama_dapur'] ?? 'Toko',
+              'distance': dapur != null && dapur['jarak_dummy'] != null 
+                  ? '${dapur['jarak_dummy']} km' 
+                  : '0.5 km',
+              'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
+              'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
+              'image': p['img_url'] ?? '',
+            };
+          }).toList();
+
+          _stores = List.from(_allStores);
+          _products = List.from(_allProducts);
+
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetch store list: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _filterSearch(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _stores = List.from(_allStores);
+        _products = List.from(_allProducts);
+      });
+      return;
+    }
+
+    final lowerQuery = query.toLowerCase();
+
+    setState(() {
+      _products = _allProducts.where((product) {
+        final productName = product['name'].toString().toLowerCase();
+        final storeName = product['store'].toString().toLowerCase();
+        return productName.contains(lowerQuery) || storeName.contains(lowerQuery);
+      }).toList();
+
+      _stores = _allStores.where((store) {
+        final storeName = (store['nama_dapur'] ?? '').toString().toLowerCase();
+        return storeName.contains(lowerQuery);
+      }).toList();
+    });
+  }
+
+  void _showProductDetail(BuildContext context, String foodId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return FutureBuilder<Map<String, dynamic>>(
+          future: Supabase.instance.client
+              .from('makanan')
+              .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
+              .eq('id_makanan', foodId)
+              .single(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+            }
+
+            final product = snapshot.data!;
+            final dapur = product['dapur'] as Map<String, dynamic>;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.zero, 
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                                child: Image.asset(
+                                  'assets/images/${product['img_url']}',
+                                  height: 280,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 280,
+                                      width: double.infinity,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                    );
+                                  },
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product['nama_makanan'], 
+                                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary)
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(children: [
+                                          const Icon(Icons.storefront, size: 18, color: Colors.grey),
+                                          const SizedBox(width: 6),
+                                          Text(dapur['nama_dapur'], style: GoogleFonts.outfit(color: Colors.grey)),
+                                        ]),
+                                        Row(children: [
+                                          const Icon(Icons.location_on, size: 18, color: Colors.redAccent),
+                                          const SizedBox(width: 4),
+                                          Text('${dapur['jarak_dummy']} km', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                        ]),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: const Color(0xFFF4FBF7), borderRadius: BorderRadius.circular(12)),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.access_time, size: 18, color: AppColors.primary),
+                                          const SizedBox(width: 8),
+                                          Text('Waktu Ambil : 14.00 - 18.00 WIB', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text('Deskripsi Makanan', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    Text(product['deskripsi'] ?? 'Tidak ada deskripsi.', style: GoogleFonts.outfit(color: Colors.grey, height: 1.5)),
+                                    const SizedBox(height: 100),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                        decoration: BoxDecoration(
+                          color: Colors.white, 
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]
+                        ),
+                        child: Row(
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Harga', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                                Row(
+                                  children: [
+                                    Text('Rp${product['harga_diskon']}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                    const SizedBox(width: 8),
+                                    Text('Rp${product['harga_asli']}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, decoration: TextDecoration.lineThrough)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  context.pop(); 
+                                  context.push(AppRoutes.orderDetail.replaceFirst(':orderId', foodId));
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF7E7E),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                child: Text('Pesan', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  Positioned(
+                    top: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 40, 
+                        height: 4, 
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9), 
+                          borderRadius: BorderRadius.circular(2),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2)
+                          ]
+                        )
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // ── Header ───────────────────────────────────────────────
           Container(
             padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 12,
+              top: MediaQuery.of(context).padding.top + 40,
               left: 20,
               right: 20,
-              bottom: 20,
+              bottom: 24,
             ),
             decoration: const BoxDecoration(
               color: AppColors.primary,
               borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
+                bottomLeft: Radius.circular(32),
+                bottomRight: Radius.circular(32),
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back + title
                 Row(
                   children: [
                     GestureDetector(
@@ -79,48 +322,56 @@ class _StoreListPageState extends State<StoreListPage> {
                       child: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Semua Surplus Terdekat',
-                          style: GoogleFonts.outfit(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.location_on, color: AppColors.accent, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Lokasi Anda',
-                              style: GoogleFonts.outfit(
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Semua Surplus Terdekat',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Color(0xFFFF6B6B), size: 14),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _userAddress,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                // Search bar
+                const SizedBox(height: 24),
                 TextField(
                   controller: _searchCtrl,
+                  onChanged: (value) => _filterSearch(value), 
                   decoration: InputDecoration(
                     hintText: 'Cari makanan, bahan makanan, toko',
-                    prefixIcon: const Icon(Icons.search, color: AppColors.textHint),
+                    prefixIcon: const Icon(Icons.search, color: AppColors.textHint, size: 20),
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                     hintStyle: GoogleFonts.outfit(
                       color: AppColors.textHint,
                       fontSize: 13,
@@ -131,28 +382,184 @@ class _StoreListPageState extends State<StoreListPage> {
             ),
           ),
 
-          // ── List ─────────────────────────────────────────────────
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(top: 20, bottom: 24),
+            child: _isLoading 
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : ListView(
+              padding: const EdgeInsets.only(top: 24, bottom: 24),
               children: [
+                if (_stores.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Toko Pilihanmu Hari Ini',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 110,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: _stores.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 16),
+                      itemBuilder: (context, index) {
+                        final store = _stores[index];
+                        return SizedBox(
+                          width: 72, 
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF6B6B), 
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.storefront, color: Colors.white, size: 28),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                store['nama_dapur'] ?? 'Toko',
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
                     'Surplus Hari Ini',
                     style: GoogleFonts.outfit(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
                       color: AppColors.primary,
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                ..._products.map((p) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                      child: _SurplusCard(product: p),
-                    )),
+                
+                if (_products.isEmpty)
+                  Center(child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Text(
+                      'Belum ada surplus yang tersedia\natau makanan tidak ditemukan.', 
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(color: AppColors.textHint),
+                    ),
+                  ))
+                else
+                  ..._products.map((p) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: _SurplusCard(
+                      product: p,
+                      onTap: () => _showProductDetail(context, p['id']),
+                    ),
+                  )),
               ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: _buildBottomNav(context),
+    );
+  }
+
+  Widget _buildBottomNav(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _NavItem(
+                icon: Icons.home_rounded,
+                label: 'Beranda',
+                selected: _currentIndex == 0,
+                onTap: () => context.go(AppRoutes.home),
+              ),
+              _NavItem(
+                icon: Icons.receipt_long_rounded,
+                label: 'Pesanan',
+                selected: _currentIndex == 1,
+                onTap: () => context.go(AppRoutes.orderHistory),
+              ),
+              _NavItem(
+                icon: Icons.person_rounded,
+                label: 'Profil',
+                selected: _currentIndex == 2,
+                onTap: () => context.go(AppRoutes.profile),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: selected ? AppColors.primary : AppColors.textHint,
+            size: 26,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? AppColors.primary : AppColors.textHint,
             ),
           ),
         ],
@@ -163,115 +570,142 @@ class _StoreListPageState extends State<StoreListPage> {
 
 class _SurplusCard extends StatelessWidget {
   final Map<String, dynamic> product;
-  const _SurplusCard({required this.product});
+  final VoidCallback onTap; 
+
+  const _SurplusCard({required this.product, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBg,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
-            offset: const Offset(0, 2),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product['name'],
-                        style: GoogleFonts.outfit(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        const Icon(Icons.storefront_outlined, size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(product['store'],
-                            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
-                      ]),
-                      const SizedBox(height: 3),
-                      Row(children: [
-                        const Icon(Icons.location_on_outlined, size: 14, color: AppColors.accent),
-                        const SizedBox(width: 4),
-                        Text(product['distance'],
-                            style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
-                      ]),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    product['image'],
-                    width: 90,
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 90, height: 80,
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.fastfood, color: AppColors.textHint),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(color: AppColors.divider, height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Rp${_fmt(product['price'])}',
+                      product['name'],
                       style: GoogleFonts.outfit(
-                        fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.priceColor),
-                    ),
-                    Text(
-                      'Rp${_fmt(product['originalPrice'])}',
-                      style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        color: AppColors.originalPriceColor,
-                        decoration: TextDecoration.lineThrough,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.storefront_outlined, size: 14, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            product['store'],
+                            style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 14, color: Color(0xFFFF6B6B)),
+                        const SizedBox(width: 6),
+                        Text(
+                          product['distance'],
+                          style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                SizedBox(
-                  height: 40,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(80, 40),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    ),
-                    child: Text('Pesan', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(width: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/${product['image']}', 
+                  width: 110,
+                  height: 70,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 110, height: 70,
+                    color: Colors.grey[200],
+                    child: const Icon(Icons.fastfood, color: Colors.grey),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Rp${_fmt(product['price'])}',
+                    style: GoogleFonts.outfit(
+                      fontSize: 18, 
+                      fontWeight: FontWeight.w800, 
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      'Rp${_fmt(product['originalPrice'])}',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(
+                height: 34,
+                width: 90,
+                child: ElevatedButton(
+                  onPressed: onTap,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF6B6B),
+                    elevation: 0,
+                    padding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                  child: Text(
+                    'Pesan', 
+                    style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
