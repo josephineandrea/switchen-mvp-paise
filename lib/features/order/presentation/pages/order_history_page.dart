@@ -140,23 +140,21 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 label: 'Beranda',
                 selected: _currentIndex == 0,
                 onTap: () {
-                  setState(() => _currentIndex = 0);
-                  context.push(AppRoutes.home);
+                  context.go(AppRoutes.home); 
                 },
               ),
               _NavItem(
                 icon: Icons.receipt_long_rounded,
                 label: 'Pesanan',
                 selected: _currentIndex == 1,
-                onTap: () => setState(() => _currentIndex = 1),
+                onTap: () {}, 
               ),
               _NavItem(
                 icon: Icons.person_rounded,
                 label: 'Profil',
                 selected: _currentIndex == 2,
                 onTap: () {
-                  setState(() => _currentIndex = 2);
-                  // context.push(AppRoutes.profile);
+                  context.go(AppRoutes.profile); 
                 },
               ),
             ],

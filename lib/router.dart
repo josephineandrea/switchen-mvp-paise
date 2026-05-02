@@ -16,6 +16,7 @@ import 'features/order/presentation/pages/order_history_page.dart';
 import 'features/order/presentation/pages/order_detail_page.dart';
 import 'features/order/presentation/pages/order_checkout_page.dart';
 import 'features/order/presentation/pages/order_success_page.dart';
+import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/coupon/presentation/pages/coupon_list_page.dart';
 import 'features/coupon/presentation/pages/coupon_detail_page.dart';
 import 'features/notification/presentation/pages/notification_page.dart';
@@ -78,6 +79,10 @@ final appRouter = GoRouter(
         final orderId = state.extra as String? ?? 'PSN-00001';
         return OrderSuccessPage(orderId: orderId);
       },
+    ),
+    GoRoute(
+      path: AppRoutes.profile, 
+      builder: (_, __) => const ProfilePage()
     ),
     GoRoute(path: AppRoutes.myCoupons, builder: (_, __) => const CouponListPage()),
     GoRoute(

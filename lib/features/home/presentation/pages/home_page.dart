@@ -585,22 +585,23 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.home_rounded,
                 label: 'Beranda',
                 selected: _currentIndex == 0,
-                onTap: () => setState(() => _currentIndex = 0),
+                onTap: () {}, 
               ),
               _NavItem(
                 icon: Icons.receipt_long_rounded,
                 label: 'Pesanan',
                 selected: _currentIndex == 1,
                 onTap: () {
-                  setState(() => _currentIndex = 1);
-                  context.push(AppRoutes.orderHistory);
+                  context.go(AppRoutes.orderHistory); 
                 },
               ),
               _NavItem(
                 icon: Icons.person_rounded,
                 label: 'Profil',
                 selected: _currentIndex == 2,
-                onTap: () => setState(() => _currentIndex = 2),
+                onTap: () {
+                  context.go(AppRoutes.profile); 
+                },
               ),
             ],
           ),
