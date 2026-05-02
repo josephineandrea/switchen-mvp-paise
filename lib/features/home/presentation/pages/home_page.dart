@@ -3,6 +3,8 @@ import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 
@@ -16,21 +18,137 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
   int _selectedCategoryId = 0;
+  
   List<Map<String, dynamic>> _categories = [];
   bool _isLoadingCategories = true;
   
-  // Pagination State
-  int _currentPage = 1;
-  final int _itemsPerPage = 15;
-  bool _isLastPage = false;
+  List<Map<String, dynamic>> _allProducts = [];
+  bool _isLoadingProducts = true;
+  double _userLat = -6.886656;
+  double _userLng = 107.580635;
 
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
+    _initApp();
   }
 
-  void _showProductDetail(BuildContext context, String foodId) {
+  Future<void> _initApp() async {
+    Position? currentPosition = await _determinePosition();
+    if (currentPosition != null) {
+      _userLat = currentPosition.latitude;
+      _userLng = currentPosition.longitude;
+    }
+    
+    await _fetchCategories();
+    await _fetchAllProducts();
+  }
+
+  Future<Position?> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return null;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return null;
+    }
+    if (permission == LocationPermission.deniedForever) return null; 
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _fetchCategories() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final response = await supabase.from('kategori').select();
+      final fetchedCategories = List<Map<String, dynamic>>.from(response);
+      
+      fetchedCategories.removeWhere((cat) => cat['nama_kategori'].toString().toLowerCase() == 'minuman');
+
+      if (mounted) {
+        setState(() {
+          _categories = [
+            {'id_kategori': 0, 'nama_kategori': 'Semua'},
+            ...fetchedCategories,
+          ];
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _fetchAllProducts() async {
+    final supabase = Supabase.instance.client;
+    try {
+      final storeResponse = await supabase.from('dapur').select();
+      final productResponse = await supabase
+          .from('makanan')
+          .select('*, dapur(nama_dapur, alamat_dapur, latitude, longitude)')
+          .gt('stok', 0);
+          
+      if (mounted) {
+        setState(() {
+          int seedHarian = DateTime.now().day + DateTime.now().month + DateTime.now().year;
+
+          List<Map<String, dynamic>> processedStores = List<Map<String, dynamic>>.from(storeResponse).map((store) {
+            double sLat = (store['latitude'] as num?)?.toDouble() ?? 0.0;
+            double sLng = (store['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distance = Geolocator.distanceBetween(_userLat, _userLng, sLat, sLng) / 1000;
+            
+            var newStore = Map<String, dynamic>.from(store);
+            newStore['raw_distance'] = distance;
+            return newStore;
+          }).toList();
+
+          processedStores.sort((a, b) => (a['raw_distance'] as double).compareTo(b['raw_distance'] as double));
+          List<Map<String, dynamic>> kandidatToko = processedStores.take(15).toList();
+          kandidatToko.shuffle(Random(seedHarian));
+          List<Map<String, dynamic>> dailyStores = kandidatToko.take(5).toList();
+          
+          List<String> namaTokoHarian = dailyStores.map((s) => s['nama_dapur'].toString()).toList();
+
+          List<Map<String, dynamic>> mappedProducts = List<Map<String, dynamic>>.from(productResponse).map((p) {
+            final dapur = p['dapur'] as Map<String, dynamic>?;
+            
+            double storeLat = (dapur?['latitude'] as num?)?.toDouble() ?? 0.0;
+            double storeLng = (dapur?['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distanceInMeters = Geolocator.distanceBetween(_userLat, _userLng, storeLat, storeLng);
+            double distanceInKm = distanceInMeters / 1000;
+
+            return {
+              'id': p['id_makanan'].toString(),
+              'name': p['nama_makanan'] ?? 'Tanpa Nama',
+              'store': dapur?['nama_dapur'] ?? 'Toko',
+              'distance': '${distanceInKm.toStringAsFixed(1)} km',
+              'raw_distance': distanceInKm,
+              'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
+              'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
+              'image': p['img_url'] ?? '',
+              'category': p['id_kategori'] ?? 0,
+            };
+          }).toList();
+
+          List<Map<String, dynamic>> dailyProducts = mappedProducts.where((p) => namaTokoHarian.contains(p['store'])).toList();
+          dailyProducts.sort((a, b) => (a['raw_distance'] as double).compareTo(b['raw_distance'] as double));
+          dailyProducts = dailyProducts.take(15).toList();
+          dailyProducts.shuffle(Random(seedHarian));
+
+          _allProducts = dailyProducts;
+          _isLoadingProducts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingProducts = false);
+    }
+  }
+
+  void _showProductDetail(BuildContext context, Map<String, dynamic> localProduct) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -39,8 +157,8 @@ class _HomePageState extends State<HomePage> {
         return FutureBuilder<Map<String, dynamic>>(
           future: Supabase.instance.client
               .from('makanan')
-              .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
-              .eq('id_makanan', foodId)
+              .select('*, dapur(nama_dapur, alamat_dapur)')
+              .eq('id_makanan', localProduct['id'])
               .single(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
@@ -107,7 +225,7 @@ class _HomePageState extends State<HomePage> {
                                         Row(children: [
                                           const Icon(Icons.location_on, size: 18, color: Colors.redAccent),
                                           const SizedBox(width: 4),
-                                          Text('${dapur['jarak_dummy']} km', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                          Text(localProduct['distance'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                         ]),
                                       ],
                                     ),
@@ -163,7 +281,7 @@ class _HomePageState extends State<HomePage> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   context.pop(); 
-                                  context.push(AppRoutes.orderDetail.replaceFirst(':orderId', foodId));
+                                  context.push(AppRoutes.orderDetail.replaceFirst(':orderId', localProduct['id']));
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFFFF7E7E),
@@ -206,60 +324,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _fetchCategories() async {
-    final supabase = Supabase.instance.client;
-    try {
-      final response = await supabase.from('kategori').select();
-      final fetchedCategories = List<Map<String, dynamic>>.from(response);
-      
-      // Filter out 'Minuman' as requested
-      fetchedCategories.removeWhere((cat) => cat['nama_kategori'].toString().toLowerCase() == 'minuman');
-
-      setState(() {
-        _categories = [
-          {'id_kategori': 0, 'nama_kategori': 'Semua'},
-          ...fetchedCategories,
-        ];
-        _isLoadingCategories = false;
-      });
-    } catch (e) {
-      setState(() => _isLoadingCategories = false);
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchProductsFromSupabase() async {
-    final supabase = Supabase.instance.client;
-    var query = supabase
-        .from('makanan')
-        .select('*, dapur(nama_dapur, jarak_dummy)')
-        .gt('stok', 0);
-        
-    if (_selectedCategoryId != 0) {
-      query = query.eq('id_kategori', _selectedCategoryId);
-    }
-    
-    // Pagination logic
-    final from = (_currentPage - 1) * _itemsPerPage;
-    final to = from + _itemsPerPage - 1;
-    final response = await query.range(from, to);
-    
-    final data = List<Map<String, dynamic>>.from(response);
-    
-    // Check if we reached the last page
-    _isLastPage = data.length < _itemsPerPage;
-    
-    return data;
-  }
-
   @override
   Widget build(BuildContext context) {
+    List<Map<String, dynamic>> displayedProducts = _allProducts;
+    if (_selectedCategoryId != 0) {
+      displayedProducts = displayedProducts.where((p) => p['category'] == _selectedCategoryId).toList();
+    }
+    displayedProducts = displayedProducts.take(5).toList();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
           Column(
             children: [
-              // ── Header Background ─────────────────────────────────────────
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(32),
@@ -271,21 +349,18 @@ class _HomePageState extends State<HomePage> {
                   color: AppColors.primary,
                   child: Stack(
                     children: [
-                      // Gambar Perempuan (Otomatis terpotong rapi di dalam batas hijau)
                       Positioned(
-                        bottom: -10, // Pas di bawah
+                        bottom: -10, 
                         right: 50, 
                         child: SizedBox(
-                          height: 150, // Sengaja dibuat besar agar pas dan terpotong
+                          height: 150, 
                           child: SvgPicture.asset('assets/images/hero_illustration.svg'),
                         ),
                       ),
-                      
-                      // Teks Header
                       Positioned(
                         top: MediaQuery.of(context).padding.top + 24,
                         left: 20,
-                        right: 140, // Kasih jarak supaya teks tidak menabrak gambar perempuan
+                        right: 140, 
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -353,14 +428,10 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 100px gap removed because background height now controls where this starts
                       const SizedBox(height: 20),
-
-                      // Category chips
                       _buildCategoryChips(),
                       const SizedBox(height: 24),
 
-                      // Section title
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -371,7 +442,7 @@ class _HomePageState extends State<HomePage> {
                               style: GoogleFonts.outfit(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.primary, // Dark green
+                                color: AppColors.primary, 
                               ),
                             ),
                             GestureDetector(
@@ -390,93 +461,26 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Product cards via FutureBuilder
-                      FutureBuilder<List<Map<String, dynamic>>>(
-                        future: _fetchProductsFromSupabase(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: CircularProgressIndicator(color: AppColors.primary),
-                            ));
-                          }
-                          if (snapshot.hasError) {
-                            return Center(child: Text('Error: ${snapshot.error}'));
-                          }
-                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Center(child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: Text('Belum ada produk dari database.'),
-                            ));
-                          }
-
-                          final products = snapshot.data!;
-                          
-                          final mappedProducts = products.map((p) {
-                            final dapur = p['dapur'] as Map<String, dynamic>?;
-                            final jarak = dapur != null && dapur['jarak_dummy'] != null 
-                                ? '${dapur['jarak_dummy']} km' 
-                                : '0.5 km';
-                            return {
-                              'id': p['id_makanan']?.toString() ?? '',
-                              'name': p['nama_makanan'] ?? 'Tanpa Nama',
-                              'store': dapur?['nama_dapur'] ?? 'Dapur Tidak Diketahui',
-                              'distance': jarak,
-                              'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
-                              'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
-                              'image': p['img_url'] ?? 'https://via.placeholder.com/150',
-                              'category': 'Semua', 
-                            };
-                          }).toList();
-
-                          return Column(
-                            children: [
-                              ...mappedProducts.map((product) => Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                child: _ProductCard(
-                                  product: product,
-                                  onTap: () => _showProductDetail(context, product['id']), // Kirim fungsinya di sini
-                                ),
-                              )),
-                              
-                              // Pagination Controls
-                              if (mappedProducts.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 24),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.chevron_left),
-                                        color: _currentPage > 1 ? AppColors.primary : AppColors.textHint,
-                                        onPressed: _currentPage > 1 
-                                            ? () => setState(() => _currentPage--) 
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Text(
-                                        'Halaman $_currentPage',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      IconButton(
-                                        icon: const Icon(Icons.chevron_right),
-                                        color: !_isLastPage ? AppColors.primary : AppColors.textHint,
-                                        onPressed: !_isLastPage 
-                                            ? () => setState(() => _currentPage++) 
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
+                      if (_isLoadingProducts)
+                        const Center(child: Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        ))
+                      else if (displayedProducts.isEmpty)
+                        Center(child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Text('Belum ada produk di kategori ini.', style: GoogleFonts.outfit(color: Colors.grey)),
+                        ))
+                      else
+                        Column(
+                          children: displayedProducts.map((product) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: _ProductCard(
+                              product: product,
+                              onTap: () => _showProductDetail(context, product),
+                            ),
+                          )).toList(),
+                        ),
 
                       const SizedBox(height: 24),
                     ],
@@ -489,10 +493,6 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: _buildBottomNav(),
     );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return const SizedBox(); // Handled in Stack
   }
 
   Widget _buildCategoryChips() {
@@ -525,7 +525,6 @@ class _HomePageState extends State<HomePage> {
           return GestureDetector(
             onTap: () => setState(() {
               _selectedCategoryId = catId;
-              _currentPage = 1; // Reset pagination when category changes
             }),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -675,7 +674,6 @@ class _ProductCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Left Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,7 +683,7 @@ class _ProductCard extends StatelessWidget {
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primary, // Dark green
+                      color: AppColors.primary, 
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -707,7 +705,7 @@ class _ProductCard extends StatelessWidget {
                   Row(
                     children: [
                       const Icon(Icons.location_on,
-                          size: 14, color: Color(0xFFFF6B6B)), // Red pin
+                          size: 14, color: Color(0xFFFF6B6B)), 
                       const SizedBox(width: 6),
                       Text(
                         product['distance'],
@@ -747,21 +745,16 @@ class _ProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            
-            // Right Side (Image + Button)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Di dalam class _ProductCard
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.asset(
-                  // Rakit jalannya: 'assets/images/' + 'nasi_goreng.jpg'
                   'assets/images/${product['image']}', 
                   width: 120,
                   height: 80,
                   fit: BoxFit.cover,
-                  // Antisipasi kalau nama file di database nggak ada di folder assets
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
                       width: 120,
@@ -774,12 +767,12 @@ class _ProductCard extends StatelessWidget {
               ),
                 const SizedBox(height: 12),
                 SizedBox(
-                  width: 120, // Lebar tombol Pesan disamakan dengan gambar
+                  width: 120, 
                   height: 36,
                   child: ElevatedButton(
                     onPressed: onTap,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B), // Red/Pink button
+                      backgroundColor: const Color(0xFFFF6B6B), 
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

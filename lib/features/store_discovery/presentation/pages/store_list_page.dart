@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math'; // 🟢 Wajib buat fungsi acak (shuffle)
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 
@@ -16,71 +18,142 @@ class _StoreListPageState extends State<StoreListPage> {
   final _searchCtrl = TextEditingController();
   final int _currentIndex = 0;
 
+  // 🟢 WADAH MASTER (Penyimpanan semua data, dipakai murni buat Search Bar)
   List<Map<String, dynamic>> _allProducts = [];
   List<Map<String, dynamic>> _allStores = [];
+
+  // 🟢 WADAH HARIAN (Menyimpan 5 toko pilihan & makanannya)
+  List<Map<String, dynamic>> _dailyProducts = [];
+  List<Map<String, dynamic>> _dailyStores = [];
+
+  // 🟢 WADAH TAMPILAN (Yang beneran digambar di layar saat ini)
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _stores = [];
   
   bool _isLoading = true;
-  String _userAddress = 'Memuat lokasi...';
+  String _userAddress = 'Mencari lokasi...';
 
   @override
   void initState() {
     super.initState();
-    _fetchData();
+    _initApp();
   }
 
-  Future<void> _fetchData() async {
+  Future<void> _initApp() async {
+    Position? currentPosition = await _determinePosition();
+    
+    double userLat = currentPosition?.latitude ?? -6.886656; 
+    double userLng = currentPosition?.longitude ?? 107.580635;
+
+    await _fetchData(userLat, userLng);
+  }
+
+  Future<Position?> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) setState(() => _userAddress = 'GPS mati. Memakai lokasi default.');
+      return null;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) setState(() => _userAddress = 'Izin ditolak. Memakai lokasi default.');
+        return null;
+      }
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) setState(() => _userAddress = 'Izin diblokir. Memakai lokasi default.');
+      return null;
+    } 
+
+    if (mounted) setState(() => _userAddress = 'Lokasi akurat ditemukan');
+    return await Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _fetchData(double userLat, double userLng) async {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
 
+      // 1. AMBIL ALAMAT USER
       Map<String, dynamic>? userData;
       if (user != null && user.email != null) {
-        userData = await supabase
-            .from('account')
-            .select('alamat')
-            .eq('email', user.email!)
-            .maybeSingle();
+        userData = await supabase.from('account').select('alamat').eq('email', user.email!).maybeSingle();
       } else {
-        userData = await supabase
-            .from('account')
-            .select('alamat')
-            .eq('id_pelanggan', 1)
-            .maybeSingle();
+        userData = await supabase.from('account').select('alamat').eq('id_pelanggan', 1).maybeSingle();
       }
-
       final fetchedAddress = userData?['alamat'] ?? 'Lokasi tidak ditemukan';
+
+      // 2. AMBIL DATA DAPUR & MAKANAN
       final storeResponse = await supabase.from('dapur').select();
-      
       final productResponse = await supabase
           .from('makanan')
-          .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
+          .select('*, dapur(nama_dapur, alamat_dapur, latitude, longitude)')
           .gt('stok', 0);
 
       if (mounted) {
         setState(() {
           _userAddress = fetchedAddress;
           
-          _allStores = List<Map<String, dynamic>>.from(storeResponse);
-          
+          int seedHarian = DateTime.now().day + DateTime.now().month + DateTime.now().year;
+
+          // ─── 🟢 3. ISI WADAH MASTER ───
+          _allStores = List<Map<String, dynamic>>.from(storeResponse).map((store) {
+            double sLat = (store['latitude'] as num?)?.toDouble() ?? 0.0;
+            double sLng = (store['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distance = Geolocator.distanceBetween(userLat, userLng, sLat, sLng) / 1000;
+            
+            var newStore = Map<String, dynamic>.from(store);
+            newStore['raw_distance'] = distance;
+            return newStore;
+          }).toList();
+
           _allProducts = List<Map<String, dynamic>>.from(productResponse).map((p) {
             final dapur = p['dapur'] as Map<String, dynamic>?;
+            
+            double storeLat = (dapur?['latitude'] as num?)?.toDouble() ?? 0.0;
+            double storeLng = (dapur?['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distanceInMeters = Geolocator.distanceBetween(userLat, userLng, storeLat, storeLng);
+            double distanceInKm = distanceInMeters / 1000;
+            
             return {
               'id': p['id_makanan'].toString(),
               'name': p['nama_makanan'] ?? 'Tanpa Nama',
               'store': dapur?['nama_dapur'] ?? 'Toko',
-              'distance': dapur != null && dapur['jarak_dummy'] != null 
-                  ? '${dapur['jarak_dummy']} km' 
-                  : '0.5 km',
+              'distance': '${distanceInKm.toStringAsFixed(1)} km',
+              'raw_distance': distanceInKm, 
               'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
               'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
               'image': p['img_url'] ?? '',
             };
           }).toList();
 
-          _stores = List.from(_allStores);
-          _products = List.from(_allProducts);
+          // ─── 🟢 4. BIKIN TAMPILAN HARIAN YANG SINKRON ───
+          
+          // Pilih 5 Toko Harian
+          List<Map<String, dynamic>> sortedStores = List.from(_allStores);
+          sortedStores.sort((a, b) => (a['raw_distance'] as double).compareTo(b['raw_distance'] as double));
+          List<Map<String, dynamic>> kandidatToko = sortedStores.take(15).toList(); // Ambil 15 terdekat
+          kandidatToko.shuffle(Random(seedHarian)); // Diacak harian
+          _dailyStores = kandidatToko.take(5).toList(); // Pastikan cuma 5 yang tampil
+          
+          // Simpan daftar nama 5 toko itu buat sinkronisasi
+          List<String> namaTokoHarian = _dailyStores.map((s) => s['nama_dapur'].toString()).toList();
+
+          // Pilih Produk yang CUMA BERASAL dari 5 toko di atas
+          _dailyProducts = _allProducts.where((p) => namaTokoHarian.contains(p['store'])).toList();
+          _dailyProducts.shuffle(Random(seedHarian)); // Acak posisi makanannya
+          _dailyProducts = _dailyProducts.take(15).toList(); // Maksimal nampilin 15 makanan biar ga kepanjangan
+
+          // ─── 🟢 5. LEMPAR KE WADAH TAMPILAN ───
+          _stores = List.from(_dailyStores);
+          _products = List.from(_dailyProducts);
 
           _isLoading = false;
         });
@@ -93,9 +166,10 @@ class _StoreListPageState extends State<StoreListPage> {
 
   void _filterSearch(String query) {
     if (query.isEmpty) {
+      // 🟢 Kalau search dihapus, balikin ke 5 toko & makanannya (sinkron)
       setState(() {
-        _stores = List.from(_allStores);
-        _products = List.from(_allProducts);
+        _stores = List.from(_dailyStores);
+        _products = List.from(_dailyProducts);
       });
       return;
     }
@@ -103,6 +177,7 @@ class _StoreListPageState extends State<StoreListPage> {
     final lowerQuery = query.toLowerCase();
 
     setState(() {
+      // 🟢 Kalau user nyari, cari ke SELURUH Master Data (powerful)
       _products = _allProducts.where((product) {
         final productName = product['name'].toString().toLowerCase();
         final storeName = product['store'].toString().toLowerCase();
@@ -125,7 +200,7 @@ class _StoreListPageState extends State<StoreListPage> {
         return FutureBuilder<Map<String, dynamic>>(
           future: Supabase.instance.client
               .from('makanan')
-              .select('*, dapur(nama_dapur, jarak_dummy, alamat_dapur)')
+              .select('*, dapur(nama_dapur, alamat_dapur)')
               .eq('id_makanan', foodId)
               .single(),
           builder: (context, snapshot) {
@@ -135,6 +210,8 @@ class _StoreListPageState extends State<StoreListPage> {
 
             final product = snapshot.data!;
             final dapur = product['dapur'] as Map<String, dynamic>;
+            final localProductData = _allProducts.firstWhere((p) => p['id'] == foodId, orElse: () => {});
+            final distanceString = localProductData['distance'] ?? '- km';
 
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
@@ -193,7 +270,7 @@ class _StoreListPageState extends State<StoreListPage> {
                                         Row(children: [
                                           const Icon(Icons.location_on, size: 18, color: Colors.redAccent),
                                           const SizedBox(width: 4),
-                                          Text('${dapur['jarak_dummy']} km', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                          Text(distanceString, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                         ]),
                                       ],
                                     ),
