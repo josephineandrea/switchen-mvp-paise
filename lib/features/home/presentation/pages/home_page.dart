@@ -16,7 +16,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
+  final int _currentIndex = 0;
   int _selectedCategoryId = 0;
   
   List<Map<String, dynamic>> _categories = [];
@@ -24,8 +24,12 @@ class _HomePageState extends State<HomePage> {
   
   List<Map<String, dynamic>> _allProducts = [];
   bool _isLoadingProducts = true;
+  
   double _userLat = -6.886656;
   double _userLng = 107.580635;
+
+  String _userName = 'Memuat...';
+  String _userEmail = 'Memuat...';
 
   @override
   void initState() {
@@ -40,6 +44,7 @@ class _HomePageState extends State<HomePage> {
       _userLng = currentPosition.longitude;
     }
     
+    await _fetchUserData();
     await _fetchCategories();
     await _fetchAllProducts();
   }
@@ -59,6 +64,36 @@ class _HomePageState extends State<HomePage> {
     if (permission == LocationPermission.deniedForever) return null; 
 
     return await Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _fetchUserData() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    try {
+      Map<String, dynamic>? userData;
+      
+      if (user != null && user.email != null) {
+        userData = await supabase.from('account').select('nama_account, email').eq('email', user.email!).maybeSingle();
+      } 
+      
+      if (userData == null) {
+        userData = await supabase.from('account').select('nama_account, email').eq('id_pelanggan', 1).maybeSingle();
+      }
+      
+      if (mounted && userData != null) {
+        setState(() {
+          _userName = userData?['nama_account'] ?? user;
+          _userEmail = userData?['email'] ?? 'Email tidak ditemukan';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _userName = 'Pengguna';
+          _userEmail = 'Email tidak ditemukan';
+        });
+      }
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -380,7 +415,7 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Jane Doe',
+                                      _userName,
                                       style: GoogleFonts.outfit(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -388,7 +423,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ),
                                     Text(
-                                      'janedoe506@gmail.com',
+                                      _userEmail,
                                       style: GoogleFonts.outfit(
                                         fontSize: 11,
                                         color: Colors.white.withOpacity(0.8),
@@ -400,7 +435,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Selamat Pagi,\nJane Doe!',
+                              'Selamat Pagi,\n$_userName!',
                               style: GoogleFonts.outfit(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
