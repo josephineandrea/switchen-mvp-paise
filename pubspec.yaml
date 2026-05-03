@@ -9,6 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.8
 
   # State Management
   flutter_bloc: ^8.1.6
@@ -68,7 +69,7 @@ dependencies:
   permission_handler: ^11.3.1
 
   # Error Monitoring
-  sentry_flutter: ^8.9.0
+  sentry_flutter: ^9.19.0
 
   # Google Fonts
   google_fonts: ^6.2.1
