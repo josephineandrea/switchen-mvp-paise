@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
@@ -69,7 +69,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final avatarUrl = 'https://ui-avatars.com/api/?name=${nama.replaceAll(' ', '+')}&background=00615F&color=fff&size=128&bold=true';
 
-    // KITA BUNGKUS SCAFFOLD KAMU DENGAN BLOC LISTENER DARI MASTER
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthUnauthenticated || state is AuthInitial) {
@@ -203,8 +202,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                                 ElevatedButton(
                                   onPressed: () {
-                                    context.pop(); // Tutup dialog dulu
-                                    // FUNGSI LOGOUT KITA GANTI PAKAI BLOC DARI MASTER
+                                    context.pop(); 
                                     context.read<AuthBloc>().add(const AuthSignOutRequested());
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -248,7 +246,6 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           ],
         ),
-        // (Pastikan fungsi _buildBottomNav tetap ada di bawahnya ya)
         bottomNavigationBar: _buildBottomNav(context),
       ),
     );
@@ -288,7 +285,6 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-}
 
   Widget _buildBottomNav(BuildContext context) {
     return Container(
