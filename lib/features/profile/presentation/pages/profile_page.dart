@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -55,13 +60,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _logout() async {
-    await Supabase.instance.client.auth.signOut();
-    if (mounted) {
-      context.go(AppRoutes.login);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final nama = _userData?['nama_account'] ?? 'Jane Doe';
@@ -71,178 +69,188 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final avatarUrl = 'https://ui-avatars.com/api/?name=${nama.replaceAll(' ', '+')}&background=00615F&color=fff&size=128&bold=true';
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-        : Column(
-        children: [
-          Stack(
-            alignment: Alignment.bottomCenter,
-            children: [
-              Container(
-                margin: const EdgeInsets.only(bottom: 50), 
-                padding: EdgeInsets.only(
-                  top: MediaQuery.of(context).padding.top + 60,
-                  bottom: 80, 
+    // KITA BUNGKUS SCAFFOLD KAMU DENGAN BLOC LISTENER DARI MASTER
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthUnauthenticated || state is AuthInitial) {
+          context.go(AppRoutes.login);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : Column(
+          children: [
+            Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(bottom: 50), 
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 60,
+                    bottom: 80, 
+                  ),
+                  width: double.infinity,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Profil Saya',
+                        style: GoogleFonts.outfit(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.background, width: 6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      )
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 46,
+                    backgroundImage: NetworkImage(avatarUrl),
+                    backgroundColor: Colors.white,
+                  ),
                 ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+            
+            Text(
+              nama,
+              style: GoogleFonts.outfit(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              email,
+              style: GoogleFonts.outfit(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            
+            const SizedBox(height: 32),
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   children: [
-                    Text(
-                      'Profil Saya',
-                      style: GoogleFonts.outfit(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
                         color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.background, width: 6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    )
-                  ],
-                ),
-                child: CircleAvatar(
-                  radius: 46,
-                  backgroundImage: NetworkImage(avatarUrl),
-                  backgroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-          
-          Text(
-            nama,
-            style: GoogleFonts.outfit(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            email,
-            style: GoogleFonts.outfit(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          
-          const SizedBox(height: 32),
-
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildInfoRow(Icons.person, 'Nama Lengkap', nama),
-                        const Divider(color: AppColors.divider, height: 1),
-                        _buildInfoRow(Icons.email, 'Email', email),
-                        const Divider(color: AppColors.divider, height: 1),
-                        _buildInfoRow(Icons.phone, 'Nomor HP', noHp),
-                        const Divider(color: AppColors.divider, height: 1),
-                        _buildInfoRow(Icons.location_on, 'Alamat', alamat),
-                      ],
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 48),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            title: Text('Konfirmasi', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                            content: Text('Yakin mau keluar dari akun ini?', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
-                            actions: [
-                              TextButton(
-                                onPressed: () => context.pop(),
-                                child: Text('Batal', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.bold)),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  context.pop();
-                                  _logout();
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFFF6B6B),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                ),
-                                child: Text('Ya, Keluar', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFF0F0),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.logout, color: Color(0xFFFF6B6B), size: 20),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Keluar Akun',
-                            style: GoogleFonts.outfit(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFFFF6B6B),
-                            ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
+                      child: Column(
+                        children: [
+                          _buildInfoRow(Icons.person, 'Nama Lengkap', nama),
+                          const Divider(color: AppColors.divider, height: 1),
+                          _buildInfoRow(Icons.email, 'Email', email),
+                          const Divider(color: AppColors.divider, height: 1),
+                          _buildInfoRow(Icons.phone, 'Nomor HP', noHp),
+                          const Divider(color: AppColors.divider, height: 1),
+                          _buildInfoRow(Icons.location_on, 'Alamat', alamat),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                    
+                    const SizedBox(height: 48),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              title: Text('Konfirmasi', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AppColors.primary)),
+                              content: Text('Yakin mau keluar dari akun ini?', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => context.pop(),
+                                  child: Text('Batal', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.bold)),
+                                ),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    context.pop(); // Tutup dialog dulu
+                                    // FUNGSI LOGOUT KITA GANTI PAKAI BLOC DARI MASTER
+                                    context.read<AuthBloc>().add(const AuthSignOutRequested());
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFF6B6B),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                  ),
+                                  child: Text('Ya, Keluar', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFFF0F0),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.logout, color: Color(0xFFFF6B6B), size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Keluar Akun',
+                              style: GoogleFonts.outfit(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFFF6B6B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
+        // (Pastikan fungsi _buildBottomNav tetap ada di bawahnya ya)
+        bottomNavigationBar: _buildBottomNav(context),
       ),
-      bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
@@ -280,12 +288,19 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+}
 
   Widget _buildBottomNav(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Padding(
@@ -319,16 +334,26 @@ class _NavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap});
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: selected ? AppColors.primary : AppColors.textHint, size: 26),
+          Icon(
+            icon,
+            color: selected ? AppColors.primary : AppColors.textHint,
+            size: 26,
+          ),
           const SizedBox(height: 4),
           Text(
             label,

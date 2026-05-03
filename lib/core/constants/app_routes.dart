@@ -36,4 +36,7 @@ class AppRoutes {
   static const String adminFoodWaste = '/admin/food-waste';
   static const String adminAnalytics = '/admin/analytics';
   static const String adminBroadcast = '/admin/broadcast';
+  static const String adminApprovalMitra = '/admin/approval/mitra';
+  static const String adminApprovalMenu = '/admin/approval/menu';
+  static const String adminKatalog = '/admin/katalog';
 }

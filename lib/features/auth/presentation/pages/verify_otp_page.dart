@@ -10,6 +10,8 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 
+import '../../../auth/domain/entities/user_entity.dart';
+
 class VerifyOtpPage extends StatefulWidget {
   final String email;
   const VerifyOtpPage({super.key, required this.email});
@@ -27,6 +29,20 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
             email: widget.email,
             token: _otpCtrl.text,
           ));
+    }
+  }
+
+  void _navigateByRole(UserRole role) {
+    switch (role) {
+      case UserRole.admin:
+        context.go(AppRoutes.adminDashboard);
+        break;
+      case UserRole.partner:
+        context.go(AppRoutes.partnerDashboard);
+        break;
+      case UserRole.consumer:
+      default:
+        context.go(AppRoutes.home);
     }
   }
 
@@ -58,7 +74,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthAuthenticated) {
-            context.go(AppRoutes.home);
+            _navigateByRole(state.user.role);
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

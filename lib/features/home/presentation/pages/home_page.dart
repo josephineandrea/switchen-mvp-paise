@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
+import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_routes.dart';
 
@@ -361,18 +364,36 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthBloc>().state;
+    String userName = 'Pengguna';
+    String userEmail = 'Memuat email...';
+    
+    if (authState is AuthAuthenticated) {
+      userName = authState.user.fullName;
+      userEmail = authState.user.email;
+    }
+    
+    final firstName = userName.split(' ').first;
+    
     List<Map<String, dynamic>> displayedProducts = _allProducts;
     if (_selectedCategoryId != 0) {
       displayedProducts = displayedProducts.where((p) => p['category'] == _selectedCategoryId).toList();
     }
     displayedProducts = displayedProducts.take(5).toList();
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          Column(
-            children: [
+    
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthUnauthenticated || state is AuthInitial) {
+          context.go(AppRoutes.login);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Stack(
+          children: [
+            Column(
+              children: [
+                // ── Header Background ─────────────────────────────────────────
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(32),
@@ -415,7 +436,7 @@ class _HomePageState extends State<HomePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      _userName,
+                                      userName,
                                       style: GoogleFonts.outfit(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -423,7 +444,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ),
                                     Text(
-                                      _userEmail,
+                                      userEmail,
                                       style: GoogleFonts.outfit(
                                         fontSize: 11,
                                         color: Colors.white.withOpacity(0.8),
@@ -435,7 +456,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(height: 24),
                             Text(
-                              'Selamat Pagi,\n$_userName!',
+                              'Selamat Pagi,\n$firstName!',
                               style: GoogleFonts.outfit(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w800,
@@ -527,8 +548,9 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       bottomNavigationBar: _buildBottomNav(),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCategoryChips() {
     if (_isLoadingCategories) {

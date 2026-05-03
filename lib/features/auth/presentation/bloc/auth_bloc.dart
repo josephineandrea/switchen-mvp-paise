@@ -22,6 +22,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthSignUpRequested>(_onSignUpRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
     on<AuthOtpVerifyRequested>(_onOtpVerifyRequested);
+    
+    // Automatically check auth status upon initialization
+    add(const AuthCheckRequested());
   }
 
   Future<void> _onCheckRequested(
