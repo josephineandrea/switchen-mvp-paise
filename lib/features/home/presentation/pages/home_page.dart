@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -17,20 +19,84 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 0;
+  final int _currentIndex = 0;
   int _selectedCategoryId = 0;
+  
   List<Map<String, dynamic>> _categories = [];
   bool _isLoadingCategories = true;
   
-  // Pagination State
-  int _currentPage = 1;
-  final int _itemsPerPage = 15;
-  bool _isLastPage = false;
+  List<Map<String, dynamic>> _allProducts = [];
+  bool _isLoadingProducts = true;
+  
+  double _userLat = -6.886656;
+  double _userLng = 107.580635;
+
+  String _userName = 'Memuat...';
+  String _userEmail = 'Memuat...';
 
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
+    _initApp();
+  }
+
+  Future<void> _initApp() async {
+    Position? currentPosition = await _determinePosition();
+    if (currentPosition != null) {
+      _userLat = currentPosition.latitude;
+      _userLng = currentPosition.longitude;
+    }
+    
+    await _fetchUserData();
+    await _fetchCategories();
+    await _fetchAllProducts();
+  }
+
+  Future<Position?> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return null;
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return null;
+    }
+    if (permission == LocationPermission.deniedForever) return null; 
+
+    return await Geolocator.getCurrentPosition();
+  }
+
+  Future<void> _fetchUserData() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    try {
+      Map<String, dynamic>? userData;
+      
+      if (user != null && user.email != null) {
+        userData = await supabase.from('account').select('nama_account, email').eq('email', user.email!).maybeSingle();
+      } 
+      
+      if (userData == null) {
+        userData = await supabase.from('account').select('nama_account, email').eq('id_pelanggan', 1).maybeSingle();
+      }
+      
+      if (mounted && userData != null) {
+        setState(() {
+          _userName = userData?['nama_account'] ?? user;
+          _userEmail = userData?['email'] ?? 'Email tidak ditemukan';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _userName = 'Pengguna';
+          _userEmail = 'Email tidak ditemukan';
+        });
+      }
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -39,43 +105,261 @@ class _HomePageState extends State<HomePage> {
       final response = await supabase.from('kategori').select();
       final fetchedCategories = List<Map<String, dynamic>>.from(response);
       
-      // Filter out 'Minuman' as requested
       fetchedCategories.removeWhere((cat) => cat['nama_kategori'].toString().toLowerCase() == 'minuman');
 
-      setState(() {
-        _categories = [
-          {'id_kategori': 0, 'nama_kategori': 'Semua'},
-          ...fetchedCategories,
-        ];
-        _isLoadingCategories = false;
-      });
+      if (mounted) {
+        setState(() {
+          _categories = [
+            {'id_kategori': 0, 'nama_kategori': 'Semua'},
+            ...fetchedCategories,
+          ];
+          _isLoadingCategories = false;
+        });
+      }
     } catch (e) {
-      setState(() => _isLoadingCategories = false);
+      if (mounted) setState(() => _isLoadingCategories = false);
     }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchProductsFromSupabase() async {
+  Future<void> _fetchAllProducts() async {
     final supabase = Supabase.instance.client;
-    var query = supabase
-        .from('makanan')
-        .select('*, dapur(nama_dapur, jarak_dummy)')
-        .gt('stok', 0);
-        
-    if (_selectedCategoryId != 0) {
-      query = query.eq('id_kategori', _selectedCategoryId);
+    try {
+      final storeResponse = await supabase.from('dapur').select();
+      final productResponse = await supabase
+          .from('makanan')
+          .select('*, dapur(nama_dapur, alamat_dapur, latitude, longitude)')
+          .gt('stok', 0);
+          
+      if (mounted) {
+        setState(() {
+          int seedHarian = DateTime.now().day + DateTime.now().month + DateTime.now().year;
+
+          List<Map<String, dynamic>> processedStores = List<Map<String, dynamic>>.from(storeResponse).map((store) {
+            double sLat = (store['latitude'] as num?)?.toDouble() ?? 0.0;
+            double sLng = (store['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distance = Geolocator.distanceBetween(_userLat, _userLng, sLat, sLng) / 1000;
+            
+            var newStore = Map<String, dynamic>.from(store);
+            newStore['raw_distance'] = distance;
+            return newStore;
+          }).toList();
+
+          processedStores.sort((a, b) => (a['raw_distance'] as double).compareTo(b['raw_distance'] as double));
+          List<Map<String, dynamic>> kandidatToko = processedStores.take(15).toList();
+          kandidatToko.shuffle(Random(seedHarian));
+          List<Map<String, dynamic>> dailyStores = kandidatToko.take(5).toList();
+          
+          List<String> namaTokoHarian = dailyStores.map((s) => s['nama_dapur'].toString()).toList();
+
+          List<Map<String, dynamic>> mappedProducts = List<Map<String, dynamic>>.from(productResponse).map((p) {
+            final dapur = p['dapur'] as Map<String, dynamic>?;
+            
+            double storeLat = (dapur?['latitude'] as num?)?.toDouble() ?? 0.0;
+            double storeLng = (dapur?['longitude'] as num?)?.toDouble() ?? 0.0;
+            double distanceInMeters = Geolocator.distanceBetween(_userLat, _userLng, storeLat, storeLng);
+            double distanceInKm = distanceInMeters / 1000;
+
+            return {
+              'id': p['id_makanan'].toString(),
+              'name': p['nama_makanan'] ?? 'Tanpa Nama',
+              'store': dapur?['nama_dapur'] ?? 'Toko',
+              'distance': '${distanceInKm.toStringAsFixed(1)} km',
+              'raw_distance': distanceInKm,
+              'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
+              'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
+              'image': p['img_url'] ?? '',
+              'category': p['id_kategori'] ?? 0,
+            };
+          }).toList();
+
+          List<Map<String, dynamic>> dailyProducts = mappedProducts.where((p) => namaTokoHarian.contains(p['store'])).toList();
+          dailyProducts.sort((a, b) => (a['raw_distance'] as double).compareTo(b['raw_distance'] as double));
+          dailyProducts = dailyProducts.take(15).toList();
+          dailyProducts.shuffle(Random(seedHarian));
+
+          _allProducts = dailyProducts;
+          _isLoadingProducts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingProducts = false);
     }
-    
-    // Pagination logic
-    final from = (_currentPage - 1) * _itemsPerPage;
-    final to = from + _itemsPerPage - 1;
-    final response = await query.range(from, to);
-    
-    final data = List<Map<String, dynamic>>.from(response);
-    
-    // Check if we reached the last page
-    _isLastPage = data.length < _itemsPerPage;
-    
-    return data;
+  }
+
+  void _showProductDetail(BuildContext context, Map<String, dynamic> localProduct) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return FutureBuilder<Map<String, dynamic>>(
+          future: Supabase.instance.client
+              .from('makanan')
+              .select('*, dapur(nama_dapur, alamat_dapur)')
+              .eq('id_makanan', localProduct['id'])
+              .single(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+            }
+
+            final product = snapshot.data!;
+            final dapur = product['dapur'] as Map<String, dynamic>;
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.zero, 
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                                child: Image.asset(
+                                  'assets/images/${product['img_url']}',
+                                  height: 280,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 280,
+                                      width: double.infinity,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                    );
+                                  },
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 24),
+                              
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      product['nama_makanan'], 
+                                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary)
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(children: [
+                                          const Icon(Icons.storefront, size: 18, color: Colors.grey),
+                                          const SizedBox(width: 6),
+                                          Text(dapur['nama_dapur'], style: GoogleFonts.outfit(color: Colors.grey)),
+                                        ]),
+                                        Row(children: [
+                                          const Icon(Icons.location_on, size: 18, color: Colors.redAccent),
+                                          const SizedBox(width: 4),
+                                          Text(localProduct['distance'], style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                        ]),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(color: const Color(0xFFF4FBF7), borderRadius: BorderRadius.circular(12)),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.access_time, size: 18, color: AppColors.primary),
+                                          const SizedBox(width: 8),
+                                          Text('Waktu Ambil : 14.00 - 18.00 WIB', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    Text('Deskripsi Makanan', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    Text(product['deskripsi'] ?? 'Tidak ada deskripsi.', style: GoogleFonts.outfit(color: Colors.grey, height: 1.5)),
+                                    const SizedBox(height: 100),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                        decoration: BoxDecoration(
+                          color: Colors.white, 
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))]
+                        ),
+                        child: Row(
+                          children: [
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Harga', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
+                                Row(
+                                  children: [
+                                    Text('Rp${product['harga_diskon']}', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                    const SizedBox(width: 8),
+                                    Text('Rp${product['harga_asli']}', style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey, decoration: TextDecoration.lineThrough)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  context.pop(); 
+                                  context.push(AppRoutes.orderDetail.replaceFirst(':orderId', localProduct['id']));
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFFF7E7E),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                ),
+                                child: Text('Pesan', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  Positioned(
+                    top: 12,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        width: 40, 
+                        height: 4, 
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9), 
+                          borderRadius: BorderRadius.circular(2),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 2)
+                          ]
+                        )
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -90,7 +374,13 @@ class _HomePageState extends State<HomePage> {
     }
     
     final firstName = userName.split(' ').first;
-
+    
+    List<Map<String, dynamic>> displayedProducts = _allProducts;
+    if (_selectedCategoryId != 0) {
+      displayedProducts = displayedProducts.where((p) => p['category'] == _selectedCategoryId).toList();
+    }
+    displayedProducts = displayedProducts.take(5).toList();
+    
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthUnauthenticated || state is AuthInitial) {
@@ -115,21 +405,18 @@ class _HomePageState extends State<HomePage> {
                   color: AppColors.primary,
                   child: Stack(
                     children: [
-                      // Gambar Perempuan (Otomatis terpotong rapi di dalam batas hijau)
                       Positioned(
-                        bottom: -10, // Pas di bawah
-                        right: 20, 
+                        bottom: -10, 
+                        right: 50, 
                         child: SizedBox(
-                          height: 150, // Sengaja dibuat besar agar pas dan terpotong
+                          height: 150, 
                           child: SvgPicture.asset('assets/images/hero_illustration.svg'),
                         ),
                       ),
-                      
-                      // Teks Header
                       Positioned(
                         top: MediaQuery.of(context).padding.top + 24,
                         left: 20,
-                        right: 140, // Kasih jarak supaya teks tidak menabrak gambar perempuan
+                        right: 140, 
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -197,14 +484,10 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 100px gap removed because background height now controls where this starts
                       const SizedBox(height: 20),
-
-                      // Category chips
                       _buildCategoryChips(),
                       const SizedBox(height: 24),
 
-                      // Section title
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -215,7 +498,7 @@ class _HomePageState extends State<HomePage> {
                               style: GoogleFonts.outfit(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.primary, // Dark green
+                                color: AppColors.primary, 
                               ),
                             ),
                             GestureDetector(
@@ -234,90 +517,26 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Product cards via FutureBuilder
-                      FutureBuilder<List<Map<String, dynamic>>>(
-                        future: _fetchProductsFromSupabase(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: CircularProgressIndicator(color: AppColors.primary),
-                            ));
-                          }
-                          if (snapshot.hasError) {
-                            return Center(child: Text('Error: ${snapshot.error}'));
-                          }
-                          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                            return const Center(child: Padding(
-                              padding: EdgeInsets.all(32.0),
-                              child: Text('Belum ada produk dari database.'),
-                            ));
-                          }
-
-                          final products = snapshot.data!;
-                          
-                          final mappedProducts = products.map((p) {
-                            final dapur = p['dapur'] as Map<String, dynamic>?;
-                            final jarak = dapur != null && dapur['jarak_dummy'] != null 
-                                ? '${dapur['jarak_dummy']} km' 
-                                : '0.5 km';
-                            return {
-                              'id': p['id_makanan']?.toString() ?? '',
-                              'name': p['nama_makanan'] ?? 'Tanpa Nama',
-                              'store': dapur?['nama_dapur'] ?? 'Dapur Tidak Diketahui',
-                              'distance': jarak,
-                              'price': (p['harga_diskon'] as num?)?.toInt() ?? 0,
-                              'originalPrice': (p['harga_asli'] as num?)?.toInt() ?? 0,
-                              'image': p['img_url'] ?? 'https://via.placeholder.com/150',
-                              'category': 'Semua', 
-                            };
-                          }).toList();
-
-                          return Column(
-                            children: [
-                              ...mappedProducts.map((product) => Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                                child: _ProductCard(product: product),
-                              )),
-                              
-                              // Pagination Controls
-                              if (mappedProducts.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 24),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.chevron_left),
-                                        color: _currentPage > 1 ? AppColors.primary : AppColors.textHint,
-                                        onPressed: _currentPage > 1 
-                                            ? () => setState(() => _currentPage--) 
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Text(
-                                        'Halaman $_currentPage',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      IconButton(
-                                        icon: const Icon(Icons.chevron_right),
-                                        color: !_isLastPage ? AppColors.primary : AppColors.textHint,
-                                        onPressed: !_isLastPage 
-                                            ? () => setState(() => _currentPage++) 
-                                            : null,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
+                      if (_isLoadingProducts)
+                        const Center(child: Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        ))
+                      else if (displayedProducts.isEmpty)
+                        Center(child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Text('Belum ada produk di kategori ini.', style: GoogleFonts.outfit(color: Colors.grey)),
+                        ))
+                      else
+                        Column(
+                          children: displayedProducts.map((product) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            child: _ProductCard(
+                              product: product,
+                              onTap: () => _showProductDetail(context, product),
+                            ),
+                          )).toList(),
+                        ),
 
                       const SizedBox(height: 24),
                     ],
@@ -332,10 +551,6 @@ class _HomePageState extends State<HomePage> {
     ),
   );
 }
-
-  Widget _buildHeader(BuildContext context) {
-    return const SizedBox(); // Handled in Stack
-  }
 
   Widget _buildCategoryChips() {
     if (_isLoadingCategories) {
@@ -367,7 +582,6 @@ class _HomePageState extends State<HomePage> {
           return GestureDetector(
             onTap: () => setState(() {
               _selectedCategoryId = catId;
-              _currentPage = 1; // Reset pagination when category changes
             }),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -427,15 +641,14 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.home_rounded,
                 label: 'Beranda',
                 selected: _currentIndex == 0,
-                onTap: () => setState(() => _currentIndex = 0),
+                onTap: () {}, 
               ),
               _NavItem(
                 icon: Icons.receipt_long_rounded,
                 label: 'Pesanan',
                 selected: _currentIndex == 1,
                 onTap: () {
-                  setState(() => _currentIndex = 1);
-                  context.push(AppRoutes.orderHistory);
+                  context.go(AppRoutes.orderHistory); 
                 },
               ),
               _NavItem(
@@ -443,7 +656,7 @@ class _HomePageState extends State<HomePage> {
                 label: 'Profil',
                 selected: _currentIndex == 2,
                 onTap: () {
-                  context.push(AppRoutes.profile);
+                  context.go(AppRoutes.profile); 
                 },
               ),
             ],
@@ -496,7 +709,8 @@ class _NavItem extends StatelessWidget {
 
 class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
-  const _ProductCard({required this.product});
+  final VoidCallback onTap;
+  const _ProductCard({required this.product, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +731,6 @@ class _ProductCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Left Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,7 +740,7 @@ class _ProductCard extends StatelessWidget {
                     style: GoogleFonts.outfit(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primary, // Dark green
+                      color: AppColors.primary, 
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -549,7 +762,7 @@ class _ProductCard extends StatelessWidget {
                   Row(
                     children: [
                       const Icon(Icons.location_on,
-                          size: 14, color: Color(0xFFFF6B6B)), // Red pin
+                          size: 14, color: Color(0xFFFF6B6B)), 
                       const SizedBox(width: 6),
                       Text(
                         product['distance'],
@@ -589,36 +802,34 @@ class _ProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            
-            // Right Side (Image + Button)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    product['image'],
-                    width: 120, // Diperbesar menyesuaikan lebar tombol
-                    height: 80,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'assets/images/${product['image']}', 
+                  width: 120,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
                       width: 120,
                       height: 80,
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.fastfood, color: AppColors.textHint),
-                    ),
-                  ),
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.fastfood, color: Colors.grey),
+                    );
+                  },
                 ),
+              ),
                 const SizedBox(height: 12),
                 SizedBox(
-                  width: 120, // Lebar tombol Pesan disamakan dengan gambar
+                  width: 120, 
                   height: 36,
                   child: ElevatedButton(
-                    onPressed: () => context.push(
-                      AppRoutes.storeDetail.replaceFirst(':storeId', product['id'] ?? 'demo'),
-                    ),
+                    onPressed: onTap,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B6B), // Red/Pink button
+                      backgroundColor: const Color(0xFFFF6B6B), 
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(

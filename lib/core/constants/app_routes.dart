@@ -14,6 +14,7 @@ class AppRoutes {
   static const String orderCheckout = '/order/checkout';
   static const String orderHistory = '/orders';
   static const String orderDetail = '/orders/:orderId';
+  static const String orderSuccess = '/order-success';
   static const String payment = '/payment';
   static const String myCoupons = '/coupons';
   static const String couponDetail = '/coupons/:couponId';
