@@ -9,7 +9,7 @@ class SwitchenLogo extends StatelessWidget {
     final double logoHeight = small ? 80.0 : 180.0;
 
     return Image.asset(
-      '../../../../../../assets/images/logo.png',
+      'assets/images/logo.png',
       height: logoHeight,
       fit: BoxFit.contain,
       errorBuilder: (context, error, stackTrace) {
