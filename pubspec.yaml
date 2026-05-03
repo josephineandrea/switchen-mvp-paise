@@ -81,6 +81,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
   flutter_lints: ^4.0.0
   build_runner: ^2.4.12
   injectable_generator: ^2.6.2
@@ -94,3 +95,10 @@ flutter:
     - assets/animations/
     - assets/icons/
     - .env
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon_app.png"
+  adaptive_icon_background: "#FFFFFF" 
+  adaptive_icon_foreground: "assets/icon/icon_app.png" 
