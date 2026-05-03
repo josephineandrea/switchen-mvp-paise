@@ -18,10 +18,13 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final int _currentIndex = 2; 
-  
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+  String _userRole = 'consumer';
+
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -29,11 +32,19 @@ class _ProfilePageState extends State<ProfilePage> {
     _fetchUserData();
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchUserData() async {
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
-      
+
       Map<String, dynamic> data;
 
       if (user != null && user.email != null) {
@@ -52,11 +63,136 @@ class _ProfilePageState extends State<ProfilePage> {
 
       setState(() {
         _userData = data;
+        _userRole = data['role'] ?? 'consumer';
+        _nameCtrl.text = data['nama_account'] ?? '';
+        _phoneCtrl.text = data['no_hp'] ?? '';
+        _addressCtrl.text = data['alamat'] ?? '';
         _isLoading = false;
       });
     } catch (e) {
-      print('Error fetch profile: $e');
-      setState(() => _isLoading = false);
+      debugPrint('Error fetch profile: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showEditSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 24,
+          right: 24,
+          top: 24,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Edit Profil',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildEditField('Nama Lengkap', _nameCtrl, Icons.person_outline),
+              const SizedBox(height: 16),
+              _buildEditField('Nomor HP', _phoneCtrl, Icons.phone_android),
+              const SizedBox(height: 16),
+              _buildEditField('Alamat', _addressCtrl, Icons.location_on_outlined),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _updateProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'Simpan Perubahan',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditField(String label, TextEditingController ctrl, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: ctrl,
+          style: GoogleFonts.outfit(fontSize: 14),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
+            filled: true,
+            fillColor: Colors.grey[100],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _updateProfile() async {
+    Navigator.pop(context);
+    setState(() => _isLoading = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('account').update({
+        'nama_account': _nameCtrl.text.trim(),
+        'no_hp': _phoneCtrl.text.trim(),
+        'alamat': _addressCtrl.text.trim(),
+      }).eq('id_pelanggan', _userData!['id_pelanggan']);
+
+      await _fetchUserData();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profil berhasil diperbarui')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal update: $e')),
+        );
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -67,7 +203,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final noHp = _userData?['no_hp'] ?? '-';
     final alamat = _userData?['alamat'] ?? 'Belum ada alamat';
 
-    final avatarUrl = 'https://ui-avatars.com/api/?name=${nama.replaceAll(' ', '+')}&background=00615F&color=fff&size=128&bold=true';
+    final avatarUrl =
+        'https://ui-avatars.com/api/?name=${nama.replaceAll(' ', '+')}&background=00615F&color=fff&size=128&bold=true';
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
@@ -77,176 +214,197 @@ class _ProfilePageState extends State<ProfilePage> {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: _isLoading 
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : Column(
-          children: [
-            Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(bottom: 50), 
-                  padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + 60,
-                    bottom: 80, 
-                  ),
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
-                  ),
-                  child: Column(
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : Column(
+                children: [
+                  Stack(
+                    alignment: Alignment.bottomCenter,
                     children: [
-                      Text(
-                        'Profil Saya',
-                        style: GoogleFonts.outfit(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 50),
+                        padding: EdgeInsets.only(
+                          top: MediaQuery.of(context).padding.top + 60,
+                          bottom: 80,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.background, width: 6),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      )
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 46,
-                    backgroundImage: NetworkImage(avatarUrl),
-                    backgroundColor: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-            
-            Text(
-              nama,
-              style: GoogleFonts.outfit(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              email,
-              style: GoogleFonts.outfit(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            
-            const SizedBox(height: 32),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          _buildInfoRow(Icons.person, 'Nama Lengkap', nama),
-                          const Divider(color: AppColors.divider, height: 1),
-                          _buildInfoRow(Icons.email, 'Email', email),
-                          const Divider(color: AppColors.divider, height: 1),
-                          _buildInfoRow(Icons.phone, 'Nomor HP', noHp),
-                          const Divider(color: AppColors.divider, height: 1),
-                          _buildInfoRow(Icons.location_on, 'Alamat', alamat),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 48),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              title: Text('Konfirmasi', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: AppColors.primary)),
-                              content: Text('Yakin mau keluar dari akun ini?', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => context.pop(),
-                                  child: Text('Batal', style: GoogleFonts.outfit(color: Colors.grey, fontWeight: FontWeight.bold)),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    context.pop(); 
-                                    context.read<AuthBloc>().add(const AuthSignOutRequested());
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFFF6B6B),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                  child: Text('Ya, Keluar', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFFF0F0),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Column(
                           children: [
-                            const Icon(Icons.logout, color: Color(0xFFFF6B6B), size: 20),
-                            const SizedBox(width: 12),
                             Text(
-                              'Keluar Akun',
+                              'Profil Saya',
                               style: GoogleFonts.outfit(
-                                fontSize: 15,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFFFF6B6B),
+                                color: Colors.white,
                               ),
                             ),
                           ],
                         ),
                       ),
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.background, width: 6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            )
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 46,
+                          backgroundImage: NetworkImage(avatarUrl),
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    nama,
+                    style: GoogleFonts.outfit(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
                     ),
-                    const SizedBox(height: 32),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    style: GoogleFonts.outfit(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: _showEditSheet,
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Edit Profil'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                _buildInfoRow(Icons.person, 'Nama Lengkap', nama),
+                                const Divider(color: AppColors.divider, height: 1),
+                                _buildInfoRow(Icons.email, 'Email', email),
+                                const Divider(color: AppColors.divider, height: 1),
+                                _buildInfoRow(Icons.phone, 'Nomor HP', noHp),
+                                const Divider(color: AppColors.divider, height: 1),
+                                _buildInfoRow(Icons.location_on, 'Alamat', alamat),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 48),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20)),
+                                    title: Text('Konfirmasi',
+                                        style: GoogleFonts.outfit(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary)),
+                                    content: Text('Yakin mau keluar dari akun ini?',
+                                        style: GoogleFonts.outfit(
+                                            color: AppColors.textSecondary)),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => context.pop(),
+                                        child: Text('Batal',
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.grey,
+                                                fontWeight: FontWeight.bold)),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          context.pop();
+                                          context
+                                              .read<AuthBloc>()
+                                              .add(const AuthSignOutRequested());
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFFF6B6B),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(20)),
+                                        ),
+                                        child: Text('Ya, Keluar',
+                                            style: GoogleFonts.outfit(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFFFF0F0),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.logout, color: Color(0xFFFF6B6B), size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'Keluar Akun',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: const Color(0xFFFF6B6B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: _buildBottomNav(context),
+        bottomNavigationBar: _isLoading ? null : _buildBottomNav(context),
       ),
     );
   }
@@ -276,7 +434,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  style: GoogleFonts.outfit(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
               ],
             ),
@@ -287,6 +446,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildBottomNav(BuildContext context) {
+    if (_userRole == 'admin') return const SizedBox.shrink();
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -303,20 +464,53 @@ class _ProfilePageState extends State<ProfilePage> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _NavItem(
-                icon: Icons.home_rounded, label: 'Beranda', selected: _currentIndex == 0,
-                onTap: () => context.go(AppRoutes.home),
-              ),
-              _NavItem(
-                icon: Icons.receipt_long_rounded, label: 'Pesanan', selected: _currentIndex == 1,
-                onTap: () => context.go(AppRoutes.orderHistory),
-              ),
-              _NavItem(
-                icon: Icons.person_rounded, label: 'Profil', selected: _currentIndex == 2,
-                onTap: () {},
-              ),
-            ],
+            children: _userRole == 'partner'
+                ? [
+                    _NavItem(
+                      icon: Icons.dashboard_rounded,
+                      label: 'Dashboard',
+                      selected: false,
+                      onTap: () => context.go(AppRoutes.partnerDashboard),
+                    ),
+                    _NavItem(
+                      icon: Icons.add_circle_outline_rounded,
+                      label: 'Tambah',
+                      selected: false,
+                      onTap: () => context.push(AppRoutes.partnerAddSurplus),
+                    ),
+                    _NavItem(
+                      icon: Icons.qr_code_scanner_rounded,
+                      label: 'Scan QR',
+                      selected: false,
+                      onTap: () => context.push(AppRoutes.partnerScanCoupon),
+                    ),
+                    _NavItem(
+                      icon: Icons.person_rounded,
+                      label: 'Profil',
+                      selected: true,
+                      onTap: () {},
+                    ),
+                  ]
+                : [
+                    _NavItem(
+                      icon: Icons.home_rounded,
+                      label: 'Beranda',
+                      selected: false,
+                      onTap: () => context.go(AppRoutes.home),
+                    ),
+                    _NavItem(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Pesanan',
+                      selected: false,
+                      onTap: () => context.go(AppRoutes.orderHistory),
+                    ),
+                    _NavItem(
+                      icon: Icons.person_rounded,
+                      label: 'Profil',
+                      selected: true,
+                      onTap: () {},
+                    ),
+                  ],
           ),
         ),
       ),

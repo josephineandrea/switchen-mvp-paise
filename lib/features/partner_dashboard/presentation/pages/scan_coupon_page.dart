@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
-import 'package:flutter_bloc/flutter_bloc.dart';
-
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_routes.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_state.dart';
 
 class ScanCouponPage extends StatefulWidget {
   const ScanCouponPage({super.key});
@@ -19,23 +15,27 @@ class ScanCouponPage extends StatefulWidget {
 class _ScanCouponPageState extends State<ScanCouponPage> {
   final _kodeCtrl = TextEditingController();
   bool _isLoading = false;
+  bool _isScannerActive = true;
   Map<String, dynamic>? _orderResult;
   String? _errorMessage;
+
+  MobileScannerController scannerController = MobileScannerController();
 
   @override
   void dispose() {
     _kodeCtrl.dispose();
+    scannerController.dispose();
     super.dispose();
   }
 
-  Future<void> _cariPesanan() async {
-    final kode = _kodeCtrl.text.trim();
+  Future<void> _cariPesanan(String kode) async {
     if (kode.isEmpty) return;
 
     setState(() {
       _isLoading = true;
       _orderResult = null;
       _errorMessage = null;
+      _isScannerActive = false; // Matikan scanner sementara saat memproses
     });
 
     try {
@@ -50,12 +50,18 @@ class _ScanCouponPageState extends State<ScanCouponPage> {
           .maybeSingle();
 
       if (data == null) {
-        setState(() => _errorMessage = 'Kode QR tidak ditemukan atau tidak valid.');
+        setState(() {
+          _errorMessage = 'Kode QR tidak ditemukan.';
+          _isScannerActive = true;
+        });
       } else {
         setState(() => _orderResult = data);
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Error: $e');
+      setState(() {
+        _errorMessage = 'Terjadi kesalahan sistem.';
+        _isScannerActive = true;
+      });
     } finally {
       setState(() => _isLoading = false);
     }
@@ -74,21 +80,21 @@ class _ScanCouponPageState extends State<ScanCouponPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Pesanan #$id berhasil dikonfirmasi sebagai SELESAI!',
-                style: GoogleFonts.outfit()),
+          const SnackBar(
+            content: Text('Pesanan Berhasil Diselesaikan!'),
             backgroundColor: AppColors.primary,
           ),
         );
         setState(() {
           _orderResult = null;
           _kodeCtrl.clear();
+          _isScannerActive = true;
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal konfirmasi: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -100,206 +106,119 @@ class _ScanCouponPageState extends State<ScanCouponPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(
+      body: Column(
         children: [
-          // Header
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(40),
-              bottomRight: Radius.circular(40),
-            ),
-            child: Container(
-              height: MediaQuery.of(context).padding.top + 140,
-              width: double.infinity,
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
               color: AppColors.primary,
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 16,
-                left: 24,
-                right: 24,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(32),
+                bottomRight: Radius.circular(32),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Scan & Validasi Kupon',
-                    style: GoogleFonts.outfit(
-                        fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white),
-                  ),
-                  Text(
-                    'Masukkan kode QR dari pembeli untuk konfirmasi',
-                    style: GoogleFonts.outfit(fontSize: 13, color: Colors.white.withOpacity(0.8)),
-                  ),
-                ],
-              ),
+            ),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 16,
+              left: 20,
+              right: 20,
+              bottom: 24,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconButton(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Scan Kupon',
+                  style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                Text(
+                  'Arahkan kamera ke kode QR pembeli',
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.white70),
+                ),
+              ],
             ),
           ),
-
-          Padding(
-            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 150),
+          Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  // QR Placeholder area
-                  Container(
-                    height: 160,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.qr_code_scanner, size: 64, color: AppColors.primary.withOpacity(0.5)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Kamera scan segera hadir',
-                          style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                      ],
+                  // --- AREA KAMERA SCANNER ---
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: SizedBox(
+                      height: 250,
+                      width: double.infinity,
+                      child: _isScannerActive
+                          ? MobileScanner(
+                              controller: scannerController,
+                              onDetect: (capture) {
+                                final List<Barcode> barcodes = capture.barcodes;
+                                for (final barcode in barcodes) {
+                                  if (barcode.rawValue != null) {
+                                    _cariPesanan(barcode.rawValue!);
+                                    break;
+                                  }
+                                }
+                              },
+                            )
+                          : Container(
+                              color: Colors.black87,
+                              child: const Center(
+                                child: Icon(Icons.qr_code_scanner, color: Colors.white, size: 50),
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // Manual input
-                  Text(
-                    'Atau masukkan kode secara manual:',
-                    style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 12),
+                  // Manual input (Tetap ada sebagai cadangan)
                   Row(
                     children: [
                       Expanded(
-                        child: TextFormField(
+                        child: TextField(
                           controller: _kodeCtrl,
-                          style: GoogleFonts.outfit(fontSize: 14, letterSpacing: 1),
                           decoration: InputDecoration(
-                            hintText: 'Masukkan kode kupon...',
-                            hintStyle: GoogleFonts.outfit(color: AppColors.textHint),
-                            prefixIcon: const Icon(Icons.key_outlined, color: AppColors.primary),
+                            hintText: 'Atau masukkan kode manual...',
+                            hintStyle: GoogleFonts.outfit(fontSize: 13),
                             filled: true,
                             fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(color: AppColors.divider)),
-                            enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(color: AppColors.divider)),
-                            focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: _isLoading ? null : _cariPesanan,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          elevation: 0,
+                      GestureDetector(
+                        onTap: () => _cariPesanan(_kodeCtrl.text.trim()),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(12)),
+                          child: const Icon(Icons.search, color: Colors.white),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.search),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
 
-                  // Error
                   if (_errorMessage != null)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red),
-                          const SizedBox(width: 12),
-                          Expanded(child: Text(_errorMessage!, style: GoogleFonts.outfit(color: Colors.red))),
-                        ],
-                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Text(_errorMessage!, style: GoogleFonts.outfit(color: Colors.red, fontSize: 13)),
                     ),
 
-                  // Result card
-                  if (_orderResult != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                              color: AppColors.primary.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))
-                        ],
-                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Detail Pesanan',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF3E0),
-                                    borderRadius: BorderRadius.circular(20)),
-                                child: Text(
-                                  _orderResult!['status_pesanan'] ?? '',
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 12, fontWeight: FontWeight.w600, color: Colors.orange),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 24),
-                          _infoRow('Pembeli', (_orderResult!['account']?['nama_account'] ?? '-')),
-                          _infoRow('Makanan', (_orderResult!['makanan']?['nama_makanan'] ?? '-')),
-                          _infoRow('Jumlah', '${_orderResult!['jumlah_pesan']} porsi'),
-                          _infoRow('Total', 'Rp${_orderResult!['total_harga']}'),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _isLoading ? null : _konfirmasiPengambilan,
-                              icon: const Icon(Icons.check_circle_outline),
-                              label: Text(
-                                'Konfirmasi Pesanan Diambil',
-                                style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                elevation: 0,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  if (_orderResult != null) _buildResultCard(),
                 ],
               ),
             ),
@@ -309,15 +228,52 @@ class _ScanCouponPageState extends State<ScanCouponPage> {
     );
   }
 
-  Widget _infoRow(String label, String value) {
+  Widget _buildResultCard() {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          _resRow('Pembeli', _orderResult!['account']?['nama_account'] ?? '-'),
+          _resRow('Menu', _orderResult!['makanan']?['nama_makanan'] ?? '-'),
+          _resRow('Jumlah', '${_orderResult!['jumlah_pesan']} porsi'),
+          _resRow('Total', 'Rp${_orderResult!['total_harga']}'),
+          const Divider(height: 30),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _konfirmasiPengambilan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text('Konfirmasi Selesai', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _isScannerActive = true),
+            child: const Text('Scan Ulang'),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _resRow(String label, String val) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.textSecondary)),
-          Text(value,
-              style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text(label, style: GoogleFonts.outfit(color: Colors.grey, fontSize: 13)),
+          Text(val, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );

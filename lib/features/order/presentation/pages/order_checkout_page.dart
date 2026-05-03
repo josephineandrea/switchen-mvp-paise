@@ -86,7 +86,19 @@ class _OrderCheckoutPageState extends State<OrderCheckoutPage> {
 
     try {
       final supabase = Supabase.instance.client;
-      final String userId = supabase.auth.currentUser?.id ?? '1';
+      final user = supabase.auth.currentUser;
+
+      if (user == null) throw Exception('Sesi berakhir, silakan login kembali.');
+
+      final accountData = await supabase
+          .from('account')
+          .select('id_pelanggan')
+          .eq('email', user.email!)
+          .maybeSingle();
+
+      if (accountData == null) throw Exception('Data akun tidak ditemukan di database.');
+      
+      final int idPelangganAngka = accountData['id_pelanggan'];
 
       final now = DateTime.now();
       final String formattedDate = "${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}";
@@ -95,7 +107,7 @@ class _OrderCheckoutPageState extends State<OrderCheckoutPage> {
 
       final List<Map<String, dynamic>> response = await supabase.from('pemesanan').insert({
         'id_makanan': widget.orderData['id_makanan'] ?? 0,
-        'id_pelanggan': userId, 
+        'id_pelanggan': idPelangganAngka, 
         'jumlah_pesan': widget.orderData['jumlah_pesan'] ?? 1,
         'total_harga': widget.orderData['total_harga'] ?? 0,
         'status_pesanan': 'Siap Diambil',

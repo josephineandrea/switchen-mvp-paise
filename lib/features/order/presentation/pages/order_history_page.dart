@@ -15,22 +15,36 @@ class OrderHistoryPage extends StatefulWidget {
 }
 
 class _OrderHistoryPageState extends State<OrderHistoryPage> {
-  int _currentIndex = 1;
+  final int _currentIndex = 1;
 
   Future<List<Map<String, dynamic>>> _fetchOrders() async {
     final supabase = Supabase.instance.client;
-    final String userId = supabase.auth.currentUser?.id ?? '1';
+    final user = supabase.auth.currentUser;
+
+    if (user == null) return [];
 
     try {
+      // 1. Ambil ID Angka dari tabel account berdasarkan email auth
+      final accountData = await supabase
+          .from('account')
+          .select('id_pelanggan')
+          .eq('email', user.email!)
+          .maybeSingle();
+
+      if (accountData == null) return [];
+
+      final int idPelangganAngka = accountData['id_pelanggan'];
+
+      // 2. Gunakan ID Angka tersebut untuk fetch pesanan
       final response = await supabase
           .from('pemesanan')
           .select('*, makanan(*, dapur(nama_dapur))')
-          .eq('id_pelanggan', userId) 
+          .eq('id_pelanggan', idPelangganAngka) 
           .order('tanggal_pesan', ascending: false);
           
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetch data: $e');
+      debugPrint('Error fetch data: $e');
       return [];
     }
   }
@@ -79,34 +93,49 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 final allOrders = snapshot.data ?? [];
                 
                 if (allOrders.isEmpty) {
-                  return const Center(child: Text('Belum ada pesanan nih.'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[300]),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Belum ada pesanan nih.',
+                          style: GoogleFonts.outfit(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 final activeOrders = allOrders.where((o) => o['status_pesanan'] != 'Selesai').toList();
                 final historyOrders = allOrders.where((o) => o['status_pesanan'] == 'Selesai').toList();
 
-                return ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                  children: [
-                    if (activeOrders.isNotEmpty) ...[
-                      Text(
-                        'Pesanan Aktif',
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
-                      ),
-                      const SizedBox(height: 16),
-                      ...activeOrders.map((order) => _OrderCard(order: order, isActive: true)),
-                      const SizedBox(height: 32),
+                return RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    children: [
+                      if (activeOrders.isNotEmpty) ...[
+                        Text(
+                          'Pesanan Aktif',
+                          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 16),
+                        ...activeOrders.map((order) => _OrderCard(order: order, isActive: true)),
+                        const SizedBox(height: 32),
+                      ],
+                      
+                      if (historyOrders.isNotEmpty) ...[
+                        Text(
+                          'Riwayat Pesanan',
+                          style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 16),
+                        ...historyOrders.map((order) => _OrderCard(order: order, isActive: false)),
+                      ],
                     ],
-                    
-                    if (historyOrders.isNotEmpty) ...[
-                      Text(
-                        'Riwayat Pesanan',
-                        style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary),
-                      ),
-                      const SizedBox(height: 16),
-                      ...historyOrders.map((order) => _OrderCard(order: order, isActive: false)),
-                    ],
-                  ],
+                  ),
                 );
               },
             ),
@@ -139,9 +168,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 icon: Icons.home_rounded,
                 label: 'Beranda',
                 selected: _currentIndex == 0,
-                onTap: () {
-                  context.go(AppRoutes.home); 
-                },
+                onTap: () => context.go(AppRoutes.home),
               ),
               _NavItem(
                 icon: Icons.receipt_long_rounded,
@@ -153,9 +180,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                 icon: Icons.person_rounded,
                 label: 'Profil',
                 selected: _currentIndex == 2,
-                onTap: () {
-                  context.go(AppRoutes.profile); 
-                },
+                onTap: () => context.go(AppRoutes.profile),
               ),
             ],
           ),
@@ -182,6 +207,7 @@ class _NavItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -225,7 +251,7 @@ class _OrderCard extends StatelessWidget {
     if (order['tanggal_pesan'] != null) {
       try {
         final date = DateTime.parse(order['tanggal_pesan']).toLocal();
-        formattedTime = 'Hari ini, ${DateFormat('HH:mm').format(date)} WIB';
+        formattedTime = DateFormat('dd MMM, HH:mm').format(date);
       } catch (_) {}
     }
 
@@ -269,18 +295,13 @@ class _OrderCard extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  'assets/images/$imageUrl', 
-                  width: 70,
-                  height: 70,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 70, height: 70, color: Colors.grey[100],
-                      child: const Icon(Icons.fastfood, color: Colors.grey, size: 30),
-                    );
-                  },
-                ),
+                child: imageUrl.startsWith('http') 
+                  ? Image.network(imageUrl, width: 70, height: 70, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildPlaceholder())
+                  : Image.asset(
+                      'assets/images/$imageUrl', 
+                      width: 70, height: 70, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                    ),
               ),
               const SizedBox(width: 12),
               
@@ -296,6 +317,7 @@ class _OrderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text('ID: $orderId', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.textSecondary)),
+                    Text('Total: Rp${order['total_harga']}', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   ],
                 ),
               ),
@@ -317,15 +339,22 @@ class _OrderCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Text('Selesai', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  child: Text('Selesai', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green)),
                 ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: 70, height: 70, color: Colors.grey[100],
+      child: const Icon(Icons.fastfood, color: Colors.grey, size: 30),
     );
   }
 
@@ -375,6 +404,7 @@ class _OrderCard extends StatelessWidget {
                 const SizedBox(height: 24),
                 Text(
                   'Tunjukan QR ini ke kasir saat pengambilan',
+                  textAlign: TextAlign.center,
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
