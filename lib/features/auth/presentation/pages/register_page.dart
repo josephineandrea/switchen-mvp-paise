@@ -12,8 +12,6 @@ import '../bloc/auth_state.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/switchen_logo.dart';
 
-import '../../../../core/widgets/switchen_animated_logo.dart';
-
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -82,7 +80,7 @@ class _RegisterPageState extends State<RegisterPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Center(child: SwitchenAnimatedLogo(size: 100)),
+                  const Center(child: SwitchenLogo(small: true)),
                   const SizedBox(height: 24),
 
                   // Role Selector

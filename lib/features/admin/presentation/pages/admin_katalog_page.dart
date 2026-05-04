@@ -3,8 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import '../../../../core/constants/app_colors.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
 class AdminKatalogPage extends StatefulWidget {
   const AdminKatalogPage({super.key});
@@ -76,11 +74,10 @@ class _AdminKatalogPageState extends State<AdminKatalogPage> {
     final descCtrl = TextEditingController(text: existing?['deskripsi'] ?? '');
     final hargaAsliCtrl = TextEditingController(text: '${existing?['harga_asli'] ?? ''}');
     final hargaDiskonCtrl = TextEditingController(text: '${existing?['harga_diskon'] ?? ''}');
-    String uploadedImgUrl = existing?['img_url'] ?? '';
+    final imgUrlCtrl = TextEditingController(text: existing?['img_url'] ?? '');
     int? selectedDapurId = existing?['id_dapur'];
     int? selectedKategoriId = existing?['id_kategori'];
     bool isSaving = false;
-    bool isUploadingImage = false;
 
     showModalBottomSheet(
       context: context,
@@ -126,97 +123,9 @@ class _AdminKatalogPageState extends State<AdminKatalogPage> {
                 const SizedBox(height: 6),
                 TextField(controller: nameCtrl, decoration: _inputDeco()),
                 const SizedBox(height: 12),
-                Text('Foto Menu', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
+                Text('Link Gambar (Aset)', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
-                InkWell(
-                  onTap: () async {
-                    final picker = ImagePicker();
-                    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                    if (pickedFile != null) {
-                      setModalState(() {
-                        isUploadingImage = true;
-                      });
-                      try {
-                        final fileExt = pickedFile.name.split('.').last;
-                        final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-                        final bytes = await pickedFile.readAsBytes();
-                        
-                        // Upload to 'images' bucket. 
-                        // IMPORTANT: Ensure bucket 'images' exists and is PUBLIC in Supabase Dashboard.
-                        await Supabase.instance.client.storage.from('images').uploadBinary(
-                              'makanan/$fileName',
-                              bytes,
-                              fileOptions: FileOptions(contentType: 'image/$fileExt'),
-                            );
-                        
-                        final imageUrl = Supabase.instance.client.storage.from('images').getPublicUrl('makanan/$fileName');
-                        
-                        setModalState(() {
-                          uploadedImgUrl = imageUrl;
-                          isUploadingImage = false;
-                        });
-                      } catch (e) {
-                        setModalState(() => isUploadingImage = false);
-                        if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(
-                              content: Text('Gagal upload: $e'),
-                              backgroundColor: Colors.red,
-                              action: SnackBarAction(
-                                label: 'Info', 
-                                textColor: Colors.white,
-                                onPressed: () {
-                                  showDialog(
-                                    context: ctx,
-                                    builder: (d) => AlertDialog(
-                                      title: const Text('Tips Upload'),
-                                      content: const Text('Pastikan Bucket bernama "images" sudah dibuat di Supabase Storage dan diset sebagai PUBLIC.'),
-                                      actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('OK'))],
-                                    ),
-                                  );
-                                }
-                              ),
-                            )
-                          );
-                        }
-                      }
-                    }
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.image, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            isUploadingImage
-                                ? 'Mengunggah...'
-                                : (uploadedImgUrl.isNotEmpty ? 'Gambar Terpilih' : 'Pilih Gambar dari Galeri'),
-                            style: GoogleFonts.outfit(fontSize: 14, color: Colors.black87),
-                          ),
-                        ),
-                        if (uploadedImgUrl.isNotEmpty)
-                          const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-                if (uploadedImgUrl.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: uploadedImgUrl.startsWith('http')
-                        ? Image.network(uploadedImgUrl, height: 120, width: double.infinity, fit: BoxFit.cover)
-                        : Image.asset('assets/images/$uploadedImgUrl', height: 120, width: double.infinity, fit: BoxFit.cover),
-                  ),
-                ],
+                TextField(controller: imgUrlCtrl, decoration: _inputDeco(hint: 'nama_file.jpg')),
                 const SizedBox(height: 12),
                 Text('Deskripsi', style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
@@ -253,7 +162,7 @@ class _AdminKatalogPageState extends State<AdminKatalogPage> {
                                 'deskripsi': descCtrl.text.trim(),
                                 'harga_asli': int.tryParse(hargaAsliCtrl.text) ?? 0,
                                 'harga_diskon': int.tryParse(hargaDiskonCtrl.text) ?? 0,
-                                'img_url': uploadedImgUrl,
+                                'img_url': imgUrlCtrl.text.trim(),
                                 'id_dapur': selectedDapurId,
                                 'id_kategori': selectedKategoriId ?? 1,
                                 'stok': 0,
@@ -412,31 +321,18 @@ class _MenuCrd extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: (item['img_url'] != null && item['img_url'].toString().startsWith('http'))
-                ? Image.network(
-                    item['img_url'],
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 64,
-                      height: 64,
-                      color: Colors.grey[100],
-                      child: const Icon(Icons.fastfood, color: Colors.grey),
-                    ),
-                  )
-                : Image.asset(
-                    'assets/images/${item['img_url']}',
-                    width: 64,
-                    height: 64,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 64,
-                      height: 64,
-                      color: Colors.grey[100],
-                      child: const Icon(Icons.fastfood, color: Colors.grey),
-                    ),
-                  ),
+            child: Image.asset(
+              'assets/images/${item['img_url']}',
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 64,
+                height: 64,
+                color: Colors.grey[100],
+                child: const Icon(Icons.fastfood, color: Colors.grey),
+              ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
