@@ -12,6 +12,8 @@ import '../bloc/auth_state.dart';
 import '../widgets/auth_text_field.dart';
 import '../widgets/switchen_logo.dart';
 
+import '../../../../core/widgets/switchen_animated_logo.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -67,7 +69,7 @@ class _LoginPageState extends State<LoginPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 32),
-                    const Center(child: SwitchenLogo()),
+                    const Center(child: SwitchenAnimatedLogo(size: 140)),
                     const SizedBox(height: 40),
                     Text(
                       'Selamat Datang! 👋',

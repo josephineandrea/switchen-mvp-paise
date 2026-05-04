@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'core/widgets/switchen_animated_logo.dart';
 
 import 'core/constants/app_routes.dart';
 import 'features/auth/domain/entities/user_entity.dart';
@@ -119,6 +121,8 @@ final appRouter = GoRouter(
   ],
 );
 
+
+
 class _SplashPage extends StatefulWidget {
   const _SplashPage();
   @override
@@ -129,16 +133,19 @@ class _SplashPageState extends State<_SplashPage> {
   @override
   void initState() {
     super.initState();
-    // Fire the event on the global AuthBloc after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthBloc>().add(const AuthCheckRequested());
+      // Delay transition slightly to let animation play
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          context.read<AuthBloc>().add(const AuthCheckRequested());
+        }
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
-      // Automatically uses context.read<AuthBloc>()
       listener: (context, state) {
         if (state is AuthAuthenticated) {
           switch (state.user.role) {
@@ -157,35 +164,41 @@ class _SplashPageState extends State<_SplashPage> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF00615F),
-        body: Center(
+        body: Container(
+          width: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF00615F), Color(0xFF004D40)],
+            ),
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.swap_horiz_rounded,
-                  color: Colors.white,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
+              const SwitchenAnimatedLogo(size: 200),
+              const SizedBox(height: 32),
+              Text(
                 'Switchen',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w800,
+                style: GoogleFonts.outfit(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w900,
                   color: Colors.white,
+                  letterSpacing: 1.2,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
+              Text(
+                'Ubah SURPLUS menjadi nilai PLUS',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 80),
               const CircularProgressIndicator(
-                color: Colors.white,
+                color: Colors.white24,
                 strokeWidth: 2,
               ),
             ],

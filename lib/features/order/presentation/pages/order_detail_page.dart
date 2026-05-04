@@ -110,14 +110,23 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(
-                            'assets/images/${data['img_url']}',
-                            width: 80, height: 80, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 80, height: 80, color: Colors.grey[200],
-                              child: const Icon(Icons.fastfood, size: 40, color: Colors.grey),
-                            ),
-                          ),
+                          child: (data['img_url'] != null && data['img_url'].toString().startsWith('http'))
+                              ? Image.network(
+                                  data['img_url'],
+                                  width: 80, height: 80, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 80, height: 80, color: Colors.grey[200],
+                                    child: const Icon(Icons.fastfood, size: 40, color: Colors.grey),
+                                  ),
+                                )
+                              : Image.asset(
+                                  'assets/images/${data['img_url']}',
+                                  width: 80, height: 80, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    width: 80, height: 80, color: Colors.grey[200],
+                                    child: const Icon(Icons.fastfood, size: 40, color: Colors.grey),
+                                  ),
+                                ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
