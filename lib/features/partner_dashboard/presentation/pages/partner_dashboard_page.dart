@@ -697,12 +697,14 @@ class _MakananCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: makanan['img_url'] != null
-                  ? Image.network(makanan['img_url']!, width: 56, height: 56, fit: BoxFit.cover)
-                  : Container(
-                      width: 56, height: 56,
-                      color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.fastfood, color: AppColors.textHint)),
+              child: (makanan['img_url'] != null && makanan['img_url'].toString().startsWith('http'))
+                  ? Image.network(makanan['img_url']!, width: 56, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 56, height: 56, color: AppColors.surfaceVariant, child: const Icon(Icons.fastfood, color: AppColors.textHint)))
+                  : (makanan['img_url'] != null)
+                      ? Image.asset('assets/images/${makanan['img_url']}', width: 56, height: 56, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(width: 56, height: 56, color: AppColors.surfaceVariant, child: const Icon(Icons.fastfood, color: AppColors.textHint)))
+                      : Container(
+                          width: 56, height: 56,
+                          color: AppColors.surfaceVariant,
+                          child: const Icon(Icons.fastfood, color: AppColors.textHint)),
             ),
             const SizedBox(width: 12),
             Expanded(

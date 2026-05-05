@@ -224,20 +224,35 @@ class _HomePageState extends State<HomePage> {
                             children: [
                               ClipRRect(
                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                                child: Image.asset(
-                                  'assets/images/${product['img_url']}',
-                                  height: 280,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      height: 280,
-                                      width: double.infinity,
-                                      color: Colors.grey[200],
-                                      child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
-                                    );
-                                  },
-                                ),
+                                child: (product['img_url'] != null && product['img_url'].toString().startsWith('http'))
+                                    ? Image.network(
+                                        product['img_url'],
+                                        height: 280,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            height: 280,
+                                            width: double.infinity,
+                                            color: Colors.grey[200],
+                                            child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                          );
+                                        },
+                                      )
+                                    : Image.asset(
+                                        'assets/images/${product['img_url']}',
+                                        height: 280,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            height: 280,
+                                            width: double.infinity,
+                                            color: Colors.grey[200],
+                                            child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                          );
+                                        },
+                                      ),
                               ),
                               
                               const SizedBox(height: 24),
@@ -807,20 +822,35 @@ class _ProductCard extends StatelessWidget {
               children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.asset(
-                  'assets/images/${product['image']}', 
-                  width: 120,
-                  height: 80,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: 120,
-                      height: 80,
-                      color: Colors.grey[200],
-                      child: const Icon(Icons.fastfood, color: Colors.grey),
-                    );
-                  },
-                ),
+                child: (product['image'] != null && product['image'].toString().startsWith('http'))
+                    ? Image.network(
+                        product['image'],
+                        width: 120,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 120,
+                            height: 80,
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.fastfood, color: Colors.grey),
+                          );
+                        },
+                      )
+                    : Image.asset(
+                        'assets/images/${product['image']}', 
+                        width: 120,
+                        height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 120,
+                            height: 80,
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.fastfood, color: Colors.grey),
+                          );
+                        },
+                      ),
               ),
                 const SizedBox(height: 12),
                 SizedBox(
