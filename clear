@@ -1,0 +1,29 @@
+[33mccffdaf[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mhose[m[33m, [m[1;31morigin/hose[m[33m)[m Perbaiki Upload
+[33mdcbf686[m Release App
+[33m6ef5f60[m Add comprehensive README
+[33m12ba10a[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m update gitignore
+[33m9f9efac[m edit katalog admin (tambah pilihan katalog toko)
+[33m14477c1[m profile fix bug, scan qr mitra, tambah logo switchen
+[33m16f09d0[m fix import bug
+[33m8fee9d3[m Merge pull request #3 from josephineandrea/josephine
+[33mb575cab[m[33m ([m[1;31morigin/josephine[m[33m)[m Merge branch 'master' into josephine
+[33ma5ee549[m fix header home agar memakai data dinamis
+[33m559a243[m Gambar makanan
+[33mc4bd745[m personalized store using geolocator in home page and store list page
+[33mee48328[m tambah section toko di explore, buat data di store list page menjadi dinamis, tambah fungsi search
+[33m9cbf882[m profile page, fix bottom navbar
+[33m9ad8271[m Merge pull request #2 from josephineandrea/hose
+[33mf7c00fb[m kasih batasan edit harga pada mitra
+[33m8edee0b[m Nambah fitur admin bisa add makanan nya dan mitra update stok yang dia jual
+[33m0b0f40f[m order page, payment, update some pages to use dynamic data
+[33m069d0e2[m Nambah form kerjasama mitra, buat tampilan admin
+[33m6fc3129[m Middleware / Auth buat partner
+[33me8229fe[m Sambungin nama dgn yg login
+[33mda1b72e[m Ubah nama dan email jadi yang login, perbaiki pubg active and non active nav
+[33meacebbf[m Auth login (otp)
+[33ma6ee45c[m Merge pull request #1 from josephineandrea/hose
+[33m32baed0[m fix: kodingan sudah rapi di root folder
+[33ma10e0c2[m update: gabung master ke hose dan beresin file
+[33mca75ddd[m Merge branch 'master' into hose
+[33mcf8cd04[m[33m ([m[1;32mmaster[m[33m)[m Home page awal
+[33m8096d09[m[33m ([m[1;31morigin/andrew[m[33m)[m Initial commit

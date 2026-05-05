@@ -57,17 +57,29 @@ class _StoreDetailPageState extends State<StoreDetailPage> {
                     // Product hero image (Dinamis dari img_url)
                     ClipRRect(
                       borderRadius: BorderRadius.zero,
-                      child: Image.network(
-                        product['img_url'] ?? '',
-                        width: double.infinity,
-                        height: 220,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 220,
-                          color: AppColors.surfaceVariant,
-                          child: const Icon(Icons.fastfood, size: 60, color: AppColors.textHint),
-                        ),
-                      ),
+                      child: (product['img_url'] != null && product['img_url'].toString().startsWith('http'))
+                          ? Image.network(
+                              product['img_url'],
+                              width: double.infinity,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                height: 220,
+                                color: AppColors.surfaceVariant,
+                                child: const Icon(Icons.fastfood, size: 60, color: AppColors.textHint),
+                              ),
+                            )
+                          : Image.asset(
+                              'assets/images/${product['img_url']}',
+                              width: double.infinity,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                height: 220,
+                                color: AppColors.surfaceVariant,
+                                child: const Icon(Icons.fastfood, size: 60, color: AppColors.textHint),
+                              ),
+                            ),
                     ),
 
                     // Info section

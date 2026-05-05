@@ -224,18 +224,20 @@ class _HomePageState extends State<HomePage> {
                             children: [
                               ClipRRect(
                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                               child: (product['img_url'] != null && product['img_url'].toString().startsWith('http'))
+                                child: (product['img_url'] != null && product['img_url'].toString().startsWith('http'))
                                     ? Image.network(
                                         product['img_url'],
                                         height: 280,
                                         width: double.infinity,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => Container(
-                                          height: 280,
-                                          width: double.infinity,
-                                          color: Colors.grey[200],
-                                          child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
-                                        ),
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            height: 280,
+                                            width: double.infinity,
+                                            color: Colors.grey[200],
+                                            child: const Icon(Icons.fastfood, size: 50, color: Colors.grey),
+                                          );
+                                        },
                                       )
                                     : Image.asset(
                                         'assets/images/${product['img_url']}',
@@ -826,12 +828,14 @@ class _ProductCard extends StatelessWidget {
                         width: 120,
                         height: 80,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 120,
-                          height: 80,
-                          color: Colors.grey[200],
-                          child: const Icon(Icons.fastfood, color: Colors.grey),
-                        ),
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 120,
+                            height: 80,
+                            color: Colors.grey[200],
+                            child: const Icon(Icons.fastfood, color: Colors.grey),
+                          );
+                        },
                       )
                     : Image.asset(
                         'assets/images/${product['image']}', 

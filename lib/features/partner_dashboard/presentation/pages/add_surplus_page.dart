@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -28,6 +30,10 @@ class _AddSurplusPageState extends State<AddSurplusPage> {
   bool _isLoading = false;
   bool _isSaving = false;
 
+  // Upload gambar
+  String _uploadedImgUrl = '';
+  bool _isUploadingImage = false;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +48,57 @@ class _AddSurplusPageState extends State<AddSurplusPage> {
     _discountCtrl.dispose();
     _estimasiStokCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (pickedFile == null) return;
+
+    final croppedFile = await ImageCropper().cropImage(
+      sourcePath: pickedFile.path,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Foto Menu',
+          toolbarColor: const Color(0xFF004D40),
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: false,
+        ),
+        IOSUiSettings(title: 'Crop Foto Menu'),
+      ],
+    );
+    if (croppedFile == null) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final fileExt = croppedFile.path.split('.').last.toLowerCase();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final bytes = await croppedFile.readAsBytes();
+
+      await Supabase.instance.client.storage
+          .from('food_images')
+          .uploadBinary(
+            'makanan/$fileName',
+            bytes,
+            fileOptions: FileOptions(contentType: 'image/$fileExt'),
+          );
+
+      final url = Supabase.instance.client.storage
+          .from('food_images')
+          .getPublicUrl('makanan/$fileName');
+
+      setState(() => _uploadedImgUrl = url);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal upload gambar: $e', style: GoogleFonts.outfit()),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
   }
 
   Future<void> _loadKategori() async {
@@ -123,6 +180,7 @@ class _AddSurplusPageState extends State<AddSurplusPage> {
         'harga_diskon': hargaDiskon,
         'id_kategori': _selectedKategoriId,
         'status': 'pending',
+        if (_uploadedImgUrl.isNotEmpty) 'img_url': _uploadedImgUrl,
       });
 
       if (mounted) {
@@ -230,6 +288,10 @@ class _AddSurplusPageState extends State<AddSurplusPage> {
                             icon: Icons.fastfood_outlined,
                             validator: (v) => v == null || v.isEmpty ? 'Wajib diisi' : null,
                           ),
+                          const SizedBox(height: 16),
+
+                          // ─── Upload Foto Menu ───
+                          _buildImagePicker(),
                           const SizedBox(height: 16),
 
                           _buildField(
@@ -352,6 +414,108 @@ class _AddSurplusPageState extends State<AddSurplusPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Foto Menu (Opsional)',
+          style: GoogleFonts.outfit(
+              fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _isUploadingImage ? null : _pickAndUploadImage,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _uploadedImgUrl.isNotEmpty
+                    ? AppColors.primary
+                    : AppColors.divider,
+                width: _uploadedImgUrl.isNotEmpty ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: _isUploadingImage
+                      ? const SizedBox(
+                          width: 20, height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.primary))
+                      : Icon(
+                          _uploadedImgUrl.isNotEmpty
+                              ? Icons.check_circle_outline
+                              : Icons.add_photo_alternate_outlined,
+                          color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _isUploadingImage
+                        ? 'Mengunggah gambar...'
+                        : _uploadedImgUrl.isNotEmpty
+                            ? 'Foto berhasil diunggah ✓'
+                            : 'Pilih foto dari galeri HP',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: _uploadedImgUrl.isNotEmpty
+                          ? AppColors.primary
+                          : AppColors.textSecondary,
+                      fontWeight: _uploadedImgUrl.isNotEmpty
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                if (_uploadedImgUrl.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => setState(() => _uploadedImgUrl = ''),
+                    child: const Icon(Icons.close, size: 18, color: Colors.grey),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        // Preview gambar jika sudah upload
+        if (_uploadedImgUrl.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.network(
+              _uploadedImgUrl,
+              height: 160,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (ctx, child, progress) => progress == null
+                  ? child
+                  : const SizedBox(
+                      height: 160,
+                      child: Center(
+                          child: CircularProgressIndicator(color: AppColors.primary))),
+              errorBuilder: (_, __, ___) => Container(
+                height: 160,
+                color: Colors.grey[100],
+                child: const Center(
+                    child: Icon(Icons.broken_image_outlined, color: Colors.grey)),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

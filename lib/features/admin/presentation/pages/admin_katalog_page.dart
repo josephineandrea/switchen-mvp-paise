@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide AuthState;
-import '../../../../core/constants/app_colors.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:image_cropper/image_cropper.dart';
+import '../../../../core/constants/app_colors.dart';
 class AdminKatalogPage extends StatefulWidget {
   const AdminKatalogPage({super.key});
 
@@ -131,53 +130,55 @@ class _AdminKatalogPageState extends State<AdminKatalogPage> {
                 InkWell(
                   onTap: () async {
                     final picker = ImagePicker();
-                    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
                     if (pickedFile != null) {
-                      setModalState(() {
-                        isUploadingImage = true;
-                      });
-                      try {
-                        final fileExt = pickedFile.name.split('.').last;
-                        final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-                        final bytes = await pickedFile.readAsBytes();
-                        
-                        // Upload to 'images' bucket. 
-                        // IMPORTANT: Ensure bucket 'images' exists and is PUBLIC in Supabase Dashboard.
-                        await Supabase.instance.client.storage.from('images').uploadBinary(
-                              'makanan/$fileName',
-                              bytes,
-                              fileOptions: FileOptions(contentType: 'image/$fileExt'),
-                            );
-                        
-                        final imageUrl = Supabase.instance.client.storage.from('images').getPublicUrl('makanan/$fileName');
-                        
+                      CroppedFile? croppedFile = await ImageCropper().cropImage(
+                        sourcePath: pickedFile.path,
+                        uiSettings: [
+                          AndroidUiSettings(
+                            toolbarTitle: 'Potong Gambar',
+                            toolbarColor: const Color(0xFF4C1D95),
+                            toolbarWidgetColor: Colors.white,
+                            initAspectRatio: CropAspectRatioPreset.square,
+                            lockAspectRatio: false,
+                          ),
+                          IOSUiSettings(
+                            title: 'Potong Gambar',
+                          ),
+                        ],
+                      );
+                      
+                      if (croppedFile != null) {
                         setModalState(() {
-                          uploadedImgUrl = imageUrl;
-                          isUploadingImage = false;
+                          isUploadingImage = true;
                         });
-                      } catch (e) {
-                        setModalState(() => isUploadingImage = false);
-                        if (ctx.mounted) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(
-                              content: Text('Gagal upload: $e'),
-                              backgroundColor: Colors.red,
-                              action: SnackBarAction(
-                                label: 'Info', 
-                                textColor: Colors.white,
-                                onPressed: () {
-                                  showDialog(
-                                    context: ctx,
-                                    builder: (d) => AlertDialog(
-                                      title: const Text('Tips Upload'),
-                                      content: const Text('Pastikan Bucket bernama "images" sudah dibuat di Supabase Storage dan diset sebagai PUBLIC.'),
-                                      actions: [TextButton(onPressed: () => Navigator.pop(d), child: const Text('OK'))],
-                                    ),
-                                  );
-                                }
-                              ),
-                            )
-                          );
+                        try {
+                          final fileExt = croppedFile.path.split('.').last;
+                          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+                          final bytes = await croppedFile.readAsBytes();
+                          
+                          await Supabase.instance.client.storage.from('food_images').uploadBinary(
+                                'makanan/$fileName',
+                                bytes,
+                                fileOptions: FileOptions(contentType: 'image/$fileExt'),
+                              );
+                          
+                          final imageUrl = Supabase.instance.client.storage.from('food_images').getPublicUrl('makanan/$fileName');
+                          
+                          setModalState(() {
+                            uploadedImgUrl = imageUrl;
+                            isUploadingImage = false;
+                          });
+                        } catch (e) {
+                          setModalState(() => isUploadingImage = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text('Gagal upload: $e'),
+                                backgroundColor: Colors.red,
+                              )
+                            );
+                          }
                         }
                       }
                     }
