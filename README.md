@@ -33,6 +33,116 @@ Setiap hari, restoran dan kafe menghasilkan surplus makanan yang masih layak kon
 
 ---
 
+## 🚀 Panduan Instalasi & Menjalankan Aplikasi
+
+Bagian ini menjelaskan cara mengatur dan menjalankan aplikasi Switchen di perangkat lokal Anda.
+
+### Prasyarat
+
+| Tool | Versi |
+|---|---|
+| Flutter SDK | ≥ 3.3.0 |
+| Dart SDK | ≥ 3.3.0 (bundled) |
+| Android Studio / Xcode | Latest |
+| Supabase Account | — |
+| Firebase Project | — |
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/josephineandrea/switchen-mvp-paise.git
+cd switchen-mvp-paise
+flutter pub get
+```
+
+### 2. Konfigurasi Environment
+
+Buat file `.env` di root project:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+GOOGLE_MAPS_API_KEY=your-maps-api-key
+MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
+```
+
+### 3. Setup Supabase
+
+```bash
+# Install Supabase CLI
+npm install -g supabase
+
+# Login & link project
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+
+# Jalankan SQL schema di Supabase Dashboard → SQL Editor
+# Gunakan file: supabase/schema.sql
+
+# Set secrets untuk Edge Functions
+supabase secrets set MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
+supabase secrets set QR_SECRET=switchen_qr_secret_prod
+
+# Deploy Edge Functions
+supabase functions deploy rotation-algo
+supabase functions deploy generate-coupon
+supabase functions deploy send-notification
+supabase functions deploy midtrans-webhook
+```
+
+### 4. Jalankan App
+
+```bash
+flutter run
+```
+
+> 📖 Panduan setup lengkap ada di [`SETUP_GUIDE.md`](./SETUP_GUIDE.md)
+
+---
+
+## 🌊 Cara Penggunaan (Alur Aplikasi)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CONSUMER FLOW                          │
+│  Register → OTP → Home → Browse → Checkout → QR Kupon     │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                      PARTNER FLOW                           │
+│  Register → OTP → Onboarding → [Admin Approve]             │
+│  → Dashboard → Ajukan Menu → [Admin Approve]               │
+│  → Edit Harga/Stok → Scan QR Pembeli                       │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                       ADMIN FLOW                            │
+│  Login → Dashboard → Review Toko → Approve/Tolak           │
+│  → Review Menu (edit harga) → Approve/Tolak                │
+│  → Input Katalog Baru → Pantau Statistik                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🎭 Role & Akses (Test Accounts)
+
+| Role | Akses | Redirect Setelah Login |
+|---|---|---|
+| `consumer` | Home, Store, Order, Kupon, Profil | `/home` |
+| `partner` | Dashboard Mitra, Tambah Surplus, Scan QR | `/partner` |
+| `admin` | Dashboard Admin, Approval, Katalog | `/admin` |
+
+### Akun Testing (Development)
+
+```
+Consumer : consumer@test.com / password123
+Partner  : partner@test.com  / password123
+Admin    : admin@test.com    / password123
+```
+
+---
+
 ## ✨ Fitur Utama
 
 <table>
@@ -171,114 +281,6 @@ Mitra ──► permintaan_makanan (pending)
         │
   🔁 Trigger DB
   insert → makanan
-```
-
----
-
-## 🚀 Cara Menjalankan
-
-### Prasyarat
-
-| Tool | Versi |
-|---|---|
-| Flutter SDK | ≥ 3.3.0 |
-| Dart SDK | ≥ 3.3.0 (bundled) |
-| Android Studio / Xcode | Latest |
-| Supabase Account | — |
-| Firebase Project | — |
-
-### 1. Clone & Install
-
-```bash
-git clone https://github.com/josephineandrea/switchen-mvp-paise.git
-cd switchen-mvp-paise
-flutter pub get
-```
-
-### 2. Konfigurasi Environment
-
-Buat file `.env` di root project:
-
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-GOOGLE_MAPS_API_KEY=your-maps-api-key
-MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
-```
-
-### 3. Setup Supabase
-
-```bash
-# Install Supabase CLI
-npm install -g supabase
-
-# Login & link project
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-
-# Jalankan SQL schema di Supabase Dashboard → SQL Editor
-# Gunakan file: supabase/schema.sql
-
-# Set secrets untuk Edge Functions
-supabase secrets set MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
-supabase secrets set QR_SECRET=switchen_qr_secret_prod
-
-# Deploy Edge Functions
-supabase functions deploy rotation-algo
-supabase functions deploy generate-coupon
-supabase functions deploy send-notification
-supabase functions deploy midtrans-webhook
-```
-
-### 4. Jalankan App
-
-```bash
-flutter run
-```
-
-> 📖 Panduan setup lengkap ada di [`SETUP_GUIDE.md`](./SETUP_GUIDE.md)
-
----
-
-## 🎭 Role & Akses
-
-| Role | Akses | Redirect Setelah Login |
-|---|---|---|
-| `consumer` | Home, Store, Order, Kupon, Profil | `/home` |
-| `partner` | Dashboard Mitra, Tambah Surplus, Scan QR | `/partner` |
-| `admin` | Dashboard Admin, Approval, Katalog | `/admin` |
-
-### Test Accounts (Development)
-
-```
-Consumer : consumer@test.com / password123
-Partner  : partner@test.com  / password123
-Admin    : admin@test.com    / password123
-```
-
----
-
-## 🌊 Alur Penggunaan
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      CONSUMER FLOW                          │
-│  Register → OTP → Home → Browse → Checkout → QR Kupon     │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                      PARTNER FLOW                           │
-│  Register → OTP → Onboarding → [Admin Approve]             │
-│  → Dashboard → Ajukan Menu → [Admin Approve]               │
-│  → Edit Harga/Stok → Scan QR Pembeli                       │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                       ADMIN FLOW                            │
-│  Login → Dashboard → Review Toko → Approve/Tolak           │
-│  → Review Menu (edit harga) → Approve/Tolak                │
-│  → Input Katalog Baru → Pantau Statistik                   │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
