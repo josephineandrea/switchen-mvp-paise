@@ -296,7 +296,7 @@ Mitra ──► permintaan_makanan (pending)
 <div align="center">
 
 Dikembangkan dalam rangka **IYREF (Indonesia Young Researcher Fair)**
-Semester 4 — Program Studi Informatika
+Josephine Andrea Sanjaya, Valentino Hose, Andrew Therry Hendayu
 
 </div>
 
