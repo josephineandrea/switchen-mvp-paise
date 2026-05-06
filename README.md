@@ -136,9 +136,9 @@ flutter run
 ### Akun Testing (Development)
 
 ```
-Consumer : consumer@test.com / password123
-Partner  : partner@test.com  / password123
-Admin    : admin@test.com    / password123
+Consumer : 2472026@maranatha.ac.id / asdfqwer (Password)
+Partner  : itvalentinohose@gmail.com / asdfqwer (Password)
+Admin    : valentinohose@gmail.com    / asdfqwer (Password)
 ```
 
 ---
