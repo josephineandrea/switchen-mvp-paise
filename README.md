@@ -8,7 +8,7 @@
 ![Dart](https://img.shields.io/badge/Dart-3.3+-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-FCM-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
-![Midtrans](https://img.shields.io/badge/Midtrans-Payment-003580?style=for-the-badge)
+![Xendit](https://img.shields.io/badge/Xendit-Payment-0052CC?style=for-the-badge)
 
 <br/>
 
@@ -63,7 +63,7 @@ Buat file `.env` di root project:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 GOOGLE_MAPS_API_KEY=your-maps-api-key
-MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
+XENDIT_PUBLIC_KEY=xnd_public_development_xxxx
 ```
 
 ### 3. Setup Supabase
@@ -80,14 +80,14 @@ supabase link --project-ref YOUR_PROJECT_REF
 # Gunakan file: supabase/schema.sql
 
 # Set secrets untuk Edge Functions
-supabase secrets set MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx
+supabase secrets set XENDIT_SECRET_KEY=xnd_development_xxxx
 supabase secrets set QR_SECRET=switchen_qr_secret_prod
 
 # Deploy Edge Functions
 supabase functions deploy rotation-algo
 supabase functions deploy generate-coupon
 supabase functions deploy send-notification
-supabase functions deploy midtrans-webhook
+supabase functions deploy xendit-webhook
 ```
 
 ### 4. Jalankan App
@@ -136,9 +136,9 @@ flutter run
 ### Akun Testing (Development)
 
 ```
-Consumer : 2472026@maranatha.ac.id / asdfqwer (Password)
-Partner  : itvalentinohose@gmail.com / asdfqwer (Password)
-Admin    : valentinohose@gmail.com    / asdfqwer (Password)
+Consumer : consumer@test.com / password123
+Partner  : partner@test.com  / password123
+Admin    : admin@test.com    / password123
 ```
 
 ---
@@ -154,7 +154,7 @@ Admin    : valentinohose@gmail.com    / asdfqwer (Password)
 - 🗺️ **Store Discovery** — Temukan toko terdekat berbasis lokasi
 - 🎟️ **Sistem Kupon** — QR code untuk verifikasi pembelian
 - 📦 **Riwayat Order** — Kelola semua transaksi
-- 💳 **Pembayaran** — Integrasi Midtrans (sandbox)
+- 💳 **Pembayaran** — Integrasi Xendit (sandbox)
 - 🔔 **Notifikasi** — Push notification via FCM
 
 </td>
@@ -223,7 +223,7 @@ switchen/
 │       ├── rotation-algo/      # Algoritma rotasi toko
 │       ├── generate-coupon/    # Generate & validasi QR token
 │       ├── send-notification/  # FCM wrapper
-│       └── midtrans-webhook/   # Payment callback handler
+│       └── xendit-webhook/     # Payment callback handler
 ```
 
 ### 📦 Dependencies Utama
@@ -237,7 +237,7 @@ switchen/
 | **Functional** | `dartz` (Either pattern) |
 | **Maps & Lokasi** | `google_maps_flutter` · `geolocator` · `geocoding` |
 | **QR Code** | `qr_flutter` · `mobile_scanner` |
-| **Payment** | `webview_flutter` (Midtrans Snap) |
+| **Payment** | `webview_flutter` (Xendit Invoice) |
 | **Notifikasi** | `firebase_messaging` · `flutter_local_notifications` |
 | **UI** | `google_fonts` · `shimmer` · `lottie` · `flutter_svg` |
 | **Utils** | `intl` · `image_picker` · `shared_preferences` · `crypto` |
